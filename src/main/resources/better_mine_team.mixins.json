@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.i113w.better_mine_team.common.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "refmap": "better_mine_team.refmap.json",
+  "mixins": [
+    "MobMixin"
+  ],
+  "client": [
+    "CreativeModeInventoryScreenMixin",
+    "InventoryScreenMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -1,2 +1,24 @@
-# Auto detect text files and perform LF normalization
+# --- 核心设置：让 Git 自动处理换行符 ---
+# 这是一个万能设置，保证 Windows 和 Mac/Linux 之间传输文件不乱码
 * text=auto
+
+# --- 明确指定 Java 代码使用 LF (Linux标准) ---
+# 这样即使你在 Windows 上开发，提交到 GitHub 也是标准的格式
+*.java text eol=lf
+
+# --- 强制声明二进制文件 ---
+# 防止 Git 尝试修改图片或压缩包
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.jar binary
+*.zip binary
+
+# --- 杂项 ---
+# 模组的元数据文件通常需要保持一致
+*.toml text
+*.json text
+*.gradle text
+*.properties text

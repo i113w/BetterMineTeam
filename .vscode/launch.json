@@ -1,0 +1,115 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "Client",
+      "presentation": {
+        "group": "Mod Development - BetterMineTeam",
+        "order": 0
+      },
+      "projectName": "BetterMineTeam",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@D:\\Github\\BetterMineTeam\\build\\moddev\\clientRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@D:\\Github\\BetterMineTeam\\build\\moddev\\clientRunVmArgs.txt",
+        "-Dfml.modFolders\u003dbetter_mine_team%%D:\\Github\\BetterMineTeam\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "Client1",
+      "presentation": {
+        "group": "Mod Development - BetterMineTeam",
+        "order": 1
+      },
+      "projectName": "BetterMineTeam",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@D:\\Github\\BetterMineTeam\\build\\moddev\\client1RunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@D:\\Github\\BetterMineTeam\\build\\moddev\\client1RunVmArgs.txt",
+        "-Dfml.modFolders\u003dbetter_mine_team%%D:\\Github\\BetterMineTeam\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "Data",
+      "presentation": {
+        "group": "Mod Development - BetterMineTeam",
+        "order": 2
+      },
+      "projectName": "BetterMineTeam",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@D:\\Github\\BetterMineTeam\\build\\moddev\\dataRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@D:\\Github\\BetterMineTeam\\build\\moddev\\dataRunVmArgs.txt",
+        "-Dfml.modFolders\u003dbetter_mine_team%%D:\\Github\\BetterMineTeam\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "GameTestServer",
+      "presentation": {
+        "group": "Mod Development - BetterMineTeam",
+        "order": 3
+      },
+      "projectName": "BetterMineTeam",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@D:\\Github\\BetterMineTeam\\build\\moddev\\gameTestServerRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@D:\\Github\\BetterMineTeam\\build\\moddev\\gameTestServerRunVmArgs.txt",
+        "-Dfml.modFolders\u003dbetter_mine_team%%D:\\Github\\BetterMineTeam\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "Server",
+      "presentation": {
+        "group": "Mod Development - BetterMineTeam",
+        "order": 4
+      },
+      "projectName": "BetterMineTeam",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@D:\\Github\\BetterMineTeam\\build\\moddev\\serverRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@D:\\Github\\BetterMineTeam\\build\\moddev\\serverRunVmArgs.txt",
+        "-Dfml.modFolders\u003dbetter_mine_team%%D:\\Github\\BetterMineTeam\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    }
+  ]
+}
