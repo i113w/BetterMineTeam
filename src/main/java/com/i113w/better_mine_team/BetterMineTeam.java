@@ -1,10 +1,11 @@
 package com.i113w.better_mine_team;
 
 import com.i113w.better_mine_team.client.ClientSetup;
+import com.i113w.better_mine_team.client.ModKeyMappings;
 import com.mojang.logging.LogUtils;
-import com.i113w.better_mine_team.common.config.MineTeamConfig;
-// import com.xiaohunao.better_mine_team.common.init.MTAttachmentTypes; // 已删除，不再需要导入
+import com.i113w.better_mine_team.common.config.BMTConfig;
 import net.minecraft.resources.ResourceLocation;
+import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModContainer;
@@ -13,13 +14,11 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import org.slf4j.Logger;
-import com.i113w.better_mine_team.common.init.MTNetworkRegister; // 导入你的注册类
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.fml.common.Mod;
+import com.i113w.better_mine_team.common.init.MTNetworkRegister;
 
-import com.i113w.better_mine_team.common.registry.ModMenuTypes; // 导入我们刚写的注册类
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.ModContainer;
+import com.i113w.better_mine_team.common.registry.ModMenuTypes;
+import net.neoforged.fml.loading.FMLEnvironment;
+
 
 @Mod(BetterMineTeam.MODID)
 public class BetterMineTeam {
@@ -35,12 +34,14 @@ public class BetterMineTeam {
         modEventBus.addListener(this::onFMLCommonSetup);
 
         // 注册配置文件
-        modContainer.registerConfig(ModConfig.Type.COMMON, MineTeamConfig.CONFIG, "better_mine_team.toml");
+        modContainer.registerConfig(ModConfig.Type.COMMON, BMTConfig.CONFIG, "better_mine_team.toml");
         modEventBus.addListener(MTNetworkRegister::registerPayload);
         ModMenuTypes.register(modEventBus);
         modEventBus.addListener(ClientSetup::registerScreens);
 
-
+        if (FMLEnvironment.dist == Dist.CLIENT) {
+            modEventBus.addListener(ModKeyMappings::onRegisterKeyMappings);
+        }
     }
 
     public static ResourceLocation asResource(String path) {
@@ -50,7 +51,12 @@ public class BetterMineTeam {
     @SubscribeEvent
     public void onFMLCommonSetup(FMLCommonSetupEvent event) {
         // 初始化驯服材料配置
-        MineTeamConfig.loadTamingMaterials();
+        BMTConfig.loadTamingMaterials();
     }
 
+    public static void debug(String message, Object... params) {
+        if (BMTConfig.isDebugEnabled()) {
+            LOGGER.info("[BMT-DEBUG] " + message, params);
+        }
+    }
 }

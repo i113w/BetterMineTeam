@@ -46,7 +46,7 @@ public class ManageTeamCommand {
 
         dispatcher.register(
                 Commands.literal("mngteam")
-                        .requires(source -> true) // 基础功能所有人可用
+                        .requires(source -> true)
 
                         // --- Menu ---
                         .then(Commands.literal("menu")
@@ -59,10 +59,9 @@ public class ManageTeamCommand {
 
                         // --- Set (Requires OP Level 4) ---
                         .then(Commands.literal("set")
-                                .requires(source -> source.hasPermission(4)) // 这里的权限限制会应用到所有子节点
+                                .requires(source -> source.hasPermission(4))
 
                                 // 1. Set Captain
-                                // 语法: /mngteam set captain <player> [targetTeam]
                                 .then(Commands.literal("captain")
                                         .then(Commands.argument("target", EntityArgument.player())
                                                 // 情况A: 不指定队伍 -> 设为当前队伍队长
@@ -83,22 +82,18 @@ public class ManageTeamCommand {
                                 )
 
                                 // 2. Set TeamsLord
-                                // 语法: /mngteam set teamslord [player] [active]
                                 .then(Commands.literal("teamslord")
-                                        // 情况A: 不指定玩家 -> 设自己为 true
                                         .executes(context -> executeSetTeamsLord(
                                                 context,
                                                 context.getSource().getPlayerOrException(),
                                                 true
                                         ))
                                         .then(Commands.argument("target", EntityArgument.player())
-                                                // 情况B: 指定玩家 -> 设玩家为 true
                                                 .executes(context -> executeSetTeamsLord(
                                                         context,
                                                         EntityArgument.getPlayer(context, "target"),
                                                         true
                                                 ))
-                                                // 情况C (扩展): 指定玩家和状态 -> 设玩家为 false/true
                                                 .then(Commands.argument("active", BoolArgumentType.bool())
                                                         .executes(context -> executeSetTeamsLord(
                                                                 context,
@@ -139,10 +134,8 @@ public class ManageTeamCommand {
         PlayerTeam teamToSet;
 
         if (specificTeam != null) {
-            // 如果指定了队伍，就用指定的
             teamToSet = specificTeam;
         } else {
-            // 如果没指定，获取玩家当前所在的队伍
             Scoreboard scoreboard = context.getSource().getServer().getScoreboard();
             teamToSet = scoreboard.getPlayersTeam(targetPlayer.getScoreboardName());
 
@@ -150,11 +143,15 @@ public class ManageTeamCommand {
                 context.getSource().sendFailure(
                         Component.translatable("message.better_mine_team.error.no_team_specified", targetPlayer.getDisplayName())
                 );
+                BetterMineTeam.debug("CMD: SetCaptain Failed: Player {} is not in any team.", targetPlayer.getName().getString());
                 return 0;
             }
         }
 
-        // 设置数据
+        BetterMineTeam.debug("CMD: Executing SetCaptain: Player={}, Team={}, UUID={}",
+                targetPlayer.getName().getString(), teamToSet.getName(), targetPlayer.getUUID());
+
+        // 设置数据 (使用 Overworld 存储)
         TeamDataStorage storage = TeamDataStorage.get(context.getSource().getServer().overworld());
         storage.setCaptain(teamToSet.getName(), targetPlayer.getUUID());
 
@@ -169,10 +166,7 @@ public class ManageTeamCommand {
 
     // --- 逻辑实现: Set TeamsLord ---
     private static int executeSetTeamsLord(CommandContext<CommandSourceStack> context, ServerPlayer targetPlayer, boolean active) {
-        // 调用 TeamPermissions 设置 NBT
         TeamPermissions.setOverridePermission(targetPlayer, active);
-
-        // 反馈消息
         if (active) {
             context.getSource().sendSuccess(() ->
                             Component.translatable("message.better_mine_team.teamslord.granted", targetPlayer.getDisplayName()).withStyle(ChatFormatting.GOLD),
@@ -184,11 +178,10 @@ public class ManageTeamCommand {
                     true
             );
         }
-
         return 1;
     }
 
-    // --- 逻辑实现: Get (保持之前优化后的版本) ---
+    // --- 逻辑实现: Get ---
     private static int executeGet(CommandContext<CommandSourceStack> context, ServerPlayer targetPlayer, boolean showMembers, boolean showAllEntities) {
         Scoreboard scoreboard = context.getSource().getServer().getScoreboard();
         PlayerTeam team = scoreboard.getPlayersTeam(targetPlayer.getScoreboardName());
@@ -201,12 +194,16 @@ public class ManageTeamCommand {
         }
 
         Component teamName = team.getDisplayName().copy().withStyle(team.getColor());
+        int memberCount = team.getPlayers().size(); // 获取队员数
         context.getSource().sendSuccess(() ->
-                        Component.translatable("message.better_mine_team.in_team", targetPlayer.getDisplayName(), teamName),
+                        Component.translatable("message.better_mine_team.in_team",
+                                        targetPlayer.getDisplayName(),
+                                        teamName)
+                                .append(Component.literal(" [" + memberCount + " members]").withStyle(ChatFormatting.GRAY)), // 追加显示
                 false
         );
 
-        // 队长信息
+        // 队长信息 (使用 Overworld 存储)
         TeamDataStorage storage = TeamDataStorage.get(context.getSource().getServer().overworld());
         UUID captainUUID = storage.getCaptain(team.getName());
 
@@ -214,6 +211,11 @@ public class ManageTeamCommand {
             String captainName = resolvePlayerName(context.getSource().getServer(), captainUUID);
             context.getSource().sendSuccess(() ->
                             Component.translatable("message.better_mine_team.captain_info", captainName).withStyle(ChatFormatting.GOLD),
+                    false
+            );
+        } else {
+            context.getSource().sendSuccess(() ->
+                            Component.literal("Team Captain: [None]").withStyle(ChatFormatting.GRAY),
                     false
             );
         }

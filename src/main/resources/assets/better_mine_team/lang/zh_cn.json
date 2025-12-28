@@ -1,43 +1,42 @@
 {
-  "message.better_mine_team.no_team": "%s 不属于任何队伍.",
-  "message.better_mine_team.in_team": "玩家 %s 所在的队伍是: %s",
-  "message.better_mine_team.no_other_members": "该队伍中没有其他成员.",
-  "message.better_mine_team.other_members": "队伍中的其他成员: %s",
-  "message.better_mine_team.error.not_player": "此命令需要指定玩家目标,或必须由玩家执行.",
-
-  "better_mine_team.gui.title.management": "队伍操控面板",
-  
-  "better_mine_team.gui.btn.enter_rts": "进入指挥视角",
-  "better_mine_team.gui.btn.teleport_team": "全队集结",
-  "better_mine_team.gui.btn.toggle_pvp": "切换误伤开关",
-  "better_mine_team.gui.btn.close": "关闭界面",
-  
-  "better_mine_team.gui.tooltip.enter_rts": "切换至上帝视角以操控单位",
-  
-  "better_mine_team.gui.label.members": "当前队员列表",
-  "better_mine_team.gui.label.no_team": "当前未加入队伍",
-  
-  "better_mine_team.gui.status.pvp_on": "误伤: 已开启",
-  "better_mine_team.gui.status.pvp_off": "误伤: 已关闭",
-  
-  "better_mine_team.msg.rts_activated": "指挥模式已激活",
-
-  "message.better_mine_team.captain_set": "已将 %s 设置为队伍 %s 的队长.",
-  "message.better_mine_team.captain_info": "队伍队长: %s",
-  
-  "better_mine_team.gui.label.current_team": "当前队伍: %s",
-  "better_mine_team.msg.captain_transferred": "队长权限已移交给 %s",
-  "better_mine_team.msg.permission_denied": "§c权限不足:只有队长可以执行此操作!",
-  "better_mine_team.msg.follow_enabled": "跟随模式: 开启",
-  "better_mine_team.msg.follow_disabled": "跟随模式: 关闭",
-
-  "container.enderchest": "末影箱",
-  "better_mine_team.gui.btn.rts_mode": "指挥视角",
-  
-  "message.better_mine_team.error.no_team_specified": "玩家 %s 不在任何队伍中,请在指令后指定目标队伍.",
-  "message.better_mine_team.teamslord.granted": "已授予 %s [The Lord of the Teams] 权限.",
-  "message.better_mine_team.teamslord.revoked": "已撤销 %s 的 [The Lord of the Teams] 权限.",
-
-  "better_mine_team.message.permission_lord_required": "你需要 'The Lord of the Teams' 权限才能查看其他玩家的详情!"
-
+"message.better_mine_team.no_team": "%s 不属于任何队伍.",
+"message.better_mine_team.in_team": "玩家 %s 所在的队伍是: %s",
+"message.better_mine_team.no_other_members": "该队伍中没有其他成员.",
+"message.better_mine_team.other_members": "队伍中的其他成员: %s",
+"message.better_mine_team.error.not_player": "此命令需要指定玩家目标,或必须由玩家执行.",
+"better_mine_team.gui.title.management": "队伍操控面板",
+"better_mine_team.gui.btn.enter_rts": "进入指挥视角",
+"better_mine_team.gui.btn.teleport_team": "全队集结",
+"better_mine_team.gui.btn.toggle_pvp": "切换误伤开关",
+"better_mine_team.gui.btn.close": "关闭界面",
+"better_mine_team.gui.tooltip.enter_rts": "切换至上帝视角以操控单位",
+"better_mine_team.gui.label.members": "当前队员列表",
+"better_mine_team.gui.label.no_team": "当前未加入队伍",
+"better_mine_team.gui.status.pvp_on": "误伤: 已开启",
+"better_mine_team.gui.status.pvp_off": "误伤: 已关闭",
+"better_mine_team.msg.rts_activated": "指挥模式已激活",
+"message.better_mine_team.captain_set": "已将 %s 设置为队伍 %s 的队长.",
+"message.better_mine_team.captain_info": "队伍队长: %s",
+"better_mine_team.gui.label.current_team": "当前队伍: %s",
+"better_mine_team.msg.captain_transferred": "队长权限已移交给 %s",
+"better_mine_team.msg.permission_denied": "§c权限不足:只有队长可以执行此操作!",
+"better_mine_team.msg.follow_enabled": "跟随模式: 开启",
+"better_mine_team.msg.follow_disabled": "跟随模式: 关闭",
+"container.enderchest": "末影箱",
+"better_mine_team.gui.btn.rts_mode": "指挥视角",
+"message.better_mine_team.error.no_team_specified": "玩家 %s 不在任何队伍中,请在指令后指定目标队伍.",
+"message.better_mine_team.teamslord.granted": "已授予 %s [The Lord of the Teams] 权限.",
+"message.better_mine_team.teamslord.revoked": "已撤销 %s 的 [The Lord of the Teams] 权限.",
+"better_mine_team.message.permission_lord_required": "你需要 'The Lord of the Teams' 权限才能查看其他玩家的详情!",
+"key.categories.better_mine_team": "Better Mine Team",
+"key.better_mine_team.dragon_accelerate": "末影龙加速",
+"key.better_mine_team.dragon_decelerate": "末影龙减速",
+"key.better_mine_team.dragon_dismount": "离开末影龙",
+"better_mine_team.msg.dragon_tame_permission_denied": "权限不足: 只有获得 [The Lord of the Teams] 权限才能驯服末影龙!",
+"better_mine_team.msg.dragon_tame_success": "§5末影龙驯服成功!",
+"better_mine_team.gui.label.name": "名称",
+"better_mine_team.gui.tooltip.teleport": "传送单位",
+"better_mine_team.gui.tooltip.rename": "重命名",
+"better_mine_team.gui.tooltip.follow": "切换跟随",
+"better_mine_team.gui.tooltip.rts": "指挥模式 (敬请期待)"
 }

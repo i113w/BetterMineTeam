@@ -1,36 +1,31 @@
 package com.i113w.better_mine_team.common.network;
-
 import com.i113w.better_mine_team.BetterMineTeam;
+import com.i113w.better_mine_team.common.menu.EntityDetailsMenu;
 import com.i113w.better_mine_team.common.team.TeamDataStorage;
 import com.i113w.better_mine_team.common.team.TeamManager;
+import com.i113w.better_mine_team.common.team.TeamPermissions;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionHand; // 修复点 1: 导入 InteractionHand
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.animal.horse.AbstractHorse;
-import net.minecraft.world.entity.npc.InventoryCarrier;
-import net.minecraft.world.inventory.ChestMenu;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
+import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.NotNull;
-
-import com.i113w.better_mine_team.common.menu.EntityDetailsMenu; // 导入新 Menu
-import net.minecraft.network.FriendlyByteBuf;
-import com.i113w.better_mine_team.common.team.TeamPermissions;
-
 public record TeamManagementPayload(int actionType, int targetEntityId, String extraData) implements CustomPacketPayload {
-
     // Action Types
     public static final int ACTION_TELEPORT = 1;
     public static final int ACTION_TOGGLE_FOLLOW = 2;
@@ -38,6 +33,7 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
     public static final int ACTION_RENAME = 4;
     public static final int ACTION_SET_CAPTAIN = 5;
     public static final int ACTION_OPEN_INVENTORY = 6;
+    public static final int ACTION_SYNC_FOLLOW_STATE = 7; // [新增] 状态同步
 
     public static final Type<TeamManagementPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "team_manage"));
 
@@ -54,131 +50,128 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
         return TYPE;
     }
 
-    public static void serverHandle(final TeamManagementPayload payload, final IPayloadContext context) {
+    /**
+     * 统一处理入口，解决 playBidirectional 参数问题
+     */
+    public static void handle(final TeamManagementPayload payload, final IPayloadContext context) {
+        if (context.flow() == PacketFlow.CLIENTBOUND) {
+            clientHandle(payload, context);
+        } else {
+            serverHandle(payload, context);
+        }
+    }
+
+    // --- 服务端逻辑 (C -> S) ---
+    private static void serverHandle(final TeamManagementPayload payload, final IPayloadContext context) {
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer player)) return;
             ServerLevel level = player.serverLevel();
             Entity target = level.getEntity(payload.targetEntityId);
 
-            if (target == null) return;
+            if (target == null || target.isRemoved()) return;
 
-            // --- 权限与安全性检查 ---
-
-            // 1. 检查是否同队
             PlayerTeam playerTeam = TeamManager.getTeam(player);
             PlayerTeam targetTeam = TeamManager.getTeam(target);
 
-            // 如果目标没有队伍，或者两人队伍不同，拒绝操作 (除了任命队长可能需要特殊逻辑，这里暂定必须同队)
             if (playerTeam == null || targetTeam == null || !playerTeam.getName().equals(targetTeam.getName())) {
-                // 允许特例：如果目标没队，可能是招募逻辑？但这里是管理界面，假设都在队里
                 return;
             }
 
-            // 2. 检查操作者是否为队长
             boolean isCaptain = TeamDataStorage.get(level).isCaptain(player);
 
-            switch (payload.actionType) {
-                case ACTION_TELEPORT -> {
-                    // 权限：仅队长
-                    if (!isCaptain) {
-                        sendPermissionError(player);
-                        return;
+            try {
+                switch (payload.actionType) {
+                    case ACTION_TELEPORT -> {
+                        if (!isCaptain) { sendPermissionError(player); return; }
+                        if (target.isAlive()) target.teleportTo(player.getX(), player.getY(), player.getZ());
                     }
-                    // 逻辑：传送到队长身边
-                    target.teleportTo(player.getX(), player.getY(), player.getZ());
-                }
+                    case ACTION_TOGGLE_FOLLOW -> {
+                        if (!isCaptain) { sendPermissionError(player); return; }
+                        if (target instanceof Mob mob && mob.isAlive()) {
+                            boolean current = mob.getPersistentData().getBoolean("bmt_follow_enabled");
+                            boolean newState = !current;
+                            mob.getPersistentData().putBoolean("bmt_follow_enabled", newState);
 
-                case ACTION_TOGGLE_FOLLOW -> {
-                    // 权限：仅队长
-                    if (!isCaptain) {
-                        sendPermissionError(player);
-                        return;
-                    }
-                    if (target instanceof Mob mob) {
-                        boolean current = mob.getPersistentData().getBoolean("bmt_follow_enabled");
-                        mob.getPersistentData().putBoolean("bmt_follow_enabled", !current);
-                        player.displayClientMessage(Component.literal("Follow Mode: " + (!current)), true);
-                    }
-                }
-
-                case ACTION_KICK -> {
-                    // 权限：仅队长
-                    if (!isCaptain) {
-                        sendPermissionError(player);
-                        return;
-                    }
-                    // 不能踢自己
-                    if (target == player) return;
-
-                    if (target instanceof LivingEntity living) {
-                        Scoreboard scoreboard = level.getScoreboard();
-                        scoreboard.removePlayerFromTeam(living.getStringUUID(), targetTeam);
-                        living.setGlowingTag(false);
-                        // 可选：清除跟随状态
-                        living.getPersistentData().remove("bmt_follow_enabled");
-                    }
-                }
-
-                case ACTION_RENAME -> {
-                    // 权限：建议仅队长，或者所有人？这里设为仅队长
-                    if (!isCaptain) {
-                        sendPermissionError(player);
-                        return;
-                    }
-                    target.setCustomName(Component.literal(payload.extraData));
-                }
-
-                case ACTION_SET_CAPTAIN -> {
-                    // 权限：仅现任队长可以禅让 (或者 OP，但这里只处理普通逻辑)
-                    if (!isCaptain) {
-                        sendPermissionError(player);
-                        return;
-                    }
-                    if (target instanceof ServerPlayer targetPlayer) {
-                        // Map 结构保证了 Key(队伍名) 唯一，put 会自动覆盖旧队长，不会出现双队长
-                        TeamDataStorage.get(level).setCaptain(playerTeam.getName(), targetPlayer.getUUID());
-                        player.sendSystemMessage(Component.literal("Captain transferred to " + targetPlayer.getName().getString()));
-                    }
-                }
-
-                case ACTION_OPEN_INVENTORY -> {
-                    // 1. 目标是玩家
-                    if (target instanceof ServerPlayer targetPlayer) {
-                        // 检查权限：必须是自己，或者拥有 "Lord of the Teams" 权限
-                        boolean isSelf = player.getUUID().equals(targetPlayer.getUUID());
-                        boolean hasAdmin = TeamPermissions.hasOverridePermission(player);
-
-                        if (isSelf || hasAdmin) {
-                            // 打开详情界面 (复用 EntityDetailsMenu)
-                            player.openMenu(new SimpleMenuProvider(
-                                    (id, inventory, p) -> new EntityDetailsMenu(id, inventory, targetPlayer),
-                                    targetPlayer.getDisplayName()
-                            ), (buffer) -> {
-                                buffer.writeInt(targetPlayer.getId());
-                            });
-                        } else {
-                            player.displayClientMessage(
-                                    Component.translatable("better_mine_team.message.permission_lord_required")
-                                            .withStyle(ChatFormatting.RED),
-                                    true
+                            // 同步状态回客户端
+                            TeamManagementPayload syncPacket = new TeamManagementPayload(
+                                    ACTION_SYNC_FOLLOW_STATE,
+                                    mob.getId(),
+                                    String.valueOf(newState)
                             );
+                            PacketDistributor.sendToPlayer(player, syncPacket);
+
+                            player.displayClientMessage(Component.translatable(newState ? "better_mine_team.msg.follow_enabled" : "better_mine_team.msg.follow_disabled"), true);
                         }
                     }
-                    // 2. 目标是生物 (保持原有逻辑，通常队友都能看，或者你可以加 isCaptain 限制)
-                    else if (target instanceof LivingEntity livingTarget) {
-                        player.openMenu(new SimpleMenuProvider(
-                                (id, inventory, p) -> new EntityDetailsMenu(id, inventory, livingTarget),
-                                livingTarget.getDisplayName()
-                        ), (buffer) -> {
-                            buffer.writeInt(livingTarget.getId());
-                        });
+                    case ACTION_KICK -> {
+                        if (!isCaptain) { sendPermissionError(player); return; }
+                        if (target == player) return;
+                        if (target instanceof LivingEntity living) {
+                            Scoreboard scoreboard = level.getScoreboard();
+                            scoreboard.removePlayerFromTeam(living.getStringUUID(), targetTeam);
+                            living.setGlowingTag(false);
+                            living.getPersistentData().remove("bmt_follow_enabled");
+                        }
                     }
+                    case ACTION_RENAME -> {
+                        if (!isCaptain) { sendPermissionError(player); return; }
+                        target.setCustomName(Component.literal(payload.extraData));
+                        String rawName = payload.extraData;
+                        // [新增] 输入验证
+                        if (rawName.length() > 32) rawName = rawName.substring(0, 32);
+                        // 简单的过滤，防止 JSON 注入或其他显示问题
+                        String safeName = net.minecraft.ChatFormatting.stripFormatting(rawName);
+
+                        target.setCustomName(Component.literal(safeName));
+
+                    }
+                    case ACTION_SET_CAPTAIN -> {
+                        if (!isCaptain) { sendPermissionError(player); return; }
+                        if (target instanceof ServerPlayer targetPlayer) {
+                            TeamDataStorage.get(level).setCaptain(playerTeam.getName(), targetPlayer.getUUID());
+                            player.displayClientMessage(Component.translatable("better_mine_team.msg.captain_transferred", targetPlayer.getName()), true);
+                        }
+                    }
+                    case ACTION_OPEN_INVENTORY -> {
+                        if (target instanceof ServerPlayer targetPlayer) {
+                            boolean isSelf = player.getUUID().equals(targetPlayer.getUUID());
+                            boolean hasAdmin = TeamPermissions.hasOverridePermission(player);
+                            if (isSelf || hasAdmin) {
+                                player.openMenu(new SimpleMenuProvider((id, inventory, p) -> new EntityDetailsMenu(id, inventory, targetPlayer), targetPlayer.getDisplayName()), (buffer) -> buffer.writeInt(targetPlayer.getId()));
+                            } else {
+                                player.displayClientMessage(Component.translatable("better_mine_team.message.permission_lord_required").withStyle(ChatFormatting.RED), true);
+                            }
+                        } else if (target instanceof LivingEntity livingTarget && livingTarget.isAlive()) {
+                            player.openMenu(new SimpleMenuProvider((id, inventory, p) -> new EntityDetailsMenu(id, inventory, livingTarget), livingTarget.getDisplayName()), (buffer) -> buffer.writeInt(livingTarget.getId()));
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                BetterMineTeam.LOGGER.error("Error handling team action {}", payload.actionType, e);
+            }
+        });
+    }
+
+    // --- 客户端逻辑 (S -> C) ---
+    private static void clientHandle(final TeamManagementPayload payload, final IPayloadContext context) {
+        context.enqueueWork(() -> {
+            // [安全修复] 使用 context.player() 获取客户端玩家，避免直接调用 Minecraft.getInstance() 导致服务端崩溃
+            Player player = context.player();
+            if (player == null) return;
+            Level level = player.level();
+            if (level == null) return;
+
+            if (payload.actionType == ACTION_SYNC_FOLLOW_STATE) {
+                Entity entity = level.getEntity(payload.targetEntityId);
+                if (entity != null) {
+                    boolean newState = Boolean.parseBoolean(payload.extraData);
+                    entity.getPersistentData().putBoolean("bmt_follow_enabled", newState);
                 }
             }
         });
     }
 
     private static void sendPermissionError(ServerPlayer player) {
-        player.displayClientMessage(Component.literal("§cPermission Denied: You are not the Captain!"), true);
+        player.displayClientMessage(Component.translatable("better_mine_team.msg.permission_denied").withStyle(ChatFormatting.RED), true);
     }
 }

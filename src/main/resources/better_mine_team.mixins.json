@@ -5,11 +5,9 @@
   "compatibilityLevel": "JAVA_21",
   "refmap": "better_mine_team.refmap.json",
   "mixins": [
-    "MobMixin"
+    "EnderDragonMixin"
   ],
   "client": [
-    "CreativeModeInventoryScreenMixin",
-    "InventoryScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1
