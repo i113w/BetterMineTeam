@@ -97,4 +97,14 @@ public class TeamMemberList extends ObjectSelectionList<TeamMemberEntry> {
     public void addMember(TeamMemberEntry entry) {
         this.addEntry(entry);
     }
+
+    //暴露 removeEntry (如果父类是 protected)
+    public boolean removeEntry(TeamMemberEntry entry) {
+        return super.removeEntry(entry);
+    }
+
+    //暴露 children 列表供排序使用
+    public java.util.List<TeamMemberEntry> getEntries() {
+        return super.children();
+    }
 }

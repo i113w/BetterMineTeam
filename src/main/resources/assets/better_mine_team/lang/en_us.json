@@ -1,42 +1,42 @@
 {
-  "message.better_mine_team.no_team": "%s does not belong to any team.",
-  "message.better_mine_team.in_team": "Player %s is in team: %s",
-  "message.better_mine_team.no_other_members": "There are no other members in this team.",
-  "message.better_mine_team.other_members": "Other members in team: %s",
-  "message.better_mine_team.error.not_player": "This command requires a player target or must be run by a player.",
-
-  "better_mine_team.gui.title.management": "Tactical Command Center",
-  
-  "better_mine_team.gui.btn.enter_rts": "Enter RTS View",
-  "better_mine_team.gui.btn.teleport_team": "Assemble Team",
-  "better_mine_team.gui.btn.toggle_pvp": "Toggle Friendly Fire",
-  "better_mine_team.gui.btn.close": "Close",
-  
-  "better_mine_team.gui.tooltip.enter_rts": "Switch to tactical camera control",
-  
-  "better_mine_team.gui.label.members": "Team Members",
-  "better_mine_team.gui.label.no_team": "No Team Joined",
-  
-  "better_mine_team.gui.status.pvp_on": "Friendly Fire: ON",
-  "better_mine_team.gui.status.pvp_off": "Friendly Fire: OFF",
-  
-  "better_mine_team.msg.rts_activated": "Control Mode Activated",
-
-  "message.better_mine_team.captain_set": "Set %s as the captain of team %s.",
-  "message.better_mine_team.captain_info": "Team Captain: %s",
- 
-  "better_mine_team.msg.captain_transferred": "Captain transferred to %s",
-  "better_mine_team.msg.permission_denied": "§cPermission Denied: You are not the Captain!",
-  "better_mine_team.msg.follow_enabled": "Follow Mode: ON",
-  "better_mine_team.msg.follow_disabled": "Follow Mode: OFF",
-  "container.enderchest": "Ender Chest",
-  
-  "better_mine_team.gui.label.current_team": "Team: %s",
-  "better_mine_team.gui.btn.rts_mode": "Control View",
-  
-  "message.better_mine_team.error.no_team_specified": "Player %s is not in a team. Please specify a team name.",
-  "message.better_mine_team.teamslord.granted": "Granted [The Lord of the Teams] permission to %s.",
-  "message.better_mine_team.teamslord.revoked": "Revoked [The Lord of the Teams] permission from %s.",
-
-  "better_mine_team.message.permission_lord_required": "You need 'The Lord of the Teams' permission to view other players!"
+"message.better_mine_team.no_team": "%s does not belong to any team.",
+"message.better_mine_team.in_team": "Player %s is in team: %s",
+"message.better_mine_team.no_other_members": "There are no other members in this team.",
+"message.better_mine_team.other_members": "Other members in team: %s",
+"message.better_mine_team.error.not_player": "This command requires a player target or must be run by a player.",
+"better_mine_team.gui.title.management": "Tactical Command Center",
+"better_mine_team.gui.btn.enter_rts": "Enter RTS View",
+"better_mine_team.gui.btn.teleport_team": "Assemble Team",
+"better_mine_team.gui.btn.toggle_pvp": "Toggle Friendly Fire",
+"better_mine_team.gui.btn.close": "Close",
+"better_mine_team.gui.tooltip.enter_rts": "Switch to tactical camera control",
+"better_mine_team.gui.label.members": "Team Members",
+"better_mine_team.gui.label.no_team": "No Team Joined",
+"better_mine_team.gui.status.pvp_on": "Friendly Fire: ON",
+"better_mine_team.gui.status.pvp_off": "Friendly Fire: OFF",
+"better_mine_team.msg.rts_activated": "Control Mode Activated",
+"message.better_mine_team.captain_set": "Set %s as the captain of team %s.",
+"message.better_mine_team.captain_info": "Team Captain: %s",
+"better_mine_team.msg.captain_transferred": "Captain transferred to %s",
+"better_mine_team.msg.permission_denied": "§cPermission Denied: You are not the Captain!",
+"better_mine_team.msg.follow_enabled": "Follow Mode: ON",
+"better_mine_team.msg.follow_disabled": "Follow Mode: OFF",
+"container.enderchest": "Ender Chest",
+"better_mine_team.gui.label.current_team": "Team: %s",
+"better_mine_team.gui.btn.rts_mode": "Control View",
+"message.better_mine_team.error.no_team_specified": "Player %s is not in a team. Please specify a team name.",
+"message.better_mine_team.teamslord.granted": "Granted [The Lord of the Teams] permission to %s.",
+"message.better_mine_team.teamslord.revoked": "Revoked [The Lord of the Teams] permission from %s.",
+"better_mine_team.message.permission_lord_required": "You need 'The Lord of the Teams' permission to view other players!",
+"key.categories.better_mine_team": "Better Mine Team",
+"key.better_mine_team.dragon_accelerate": "Dragon Accelerate",
+"key.better_mine_team.dragon_decelerate": "Dragon Decelerate",
+"key.better_mine_team.dragon_dismount": "Dragon Dismount",
+"better_mine_team.msg.dragon_tame_permission_denied": "Insufficient Permission: You must have [The Lord of the Teams] permission to tame the Ender Dragon!",
+"better_mine_team.msg.dragon_tame_success": "§5Ender Dragon Tamed Successfully!",
+"better_mine_team.gui.label.name": "Name",
+"better_mine_team.gui.tooltip.teleport": "Teleport Entity",
+"better_mine_team.gui.tooltip.rename": "Rename Entity",
+"better_mine_team.gui.tooltip.follow": "Toggle Follow",
+"better_mine_team.gui.tooltip.rts": "RTS Mode (Coming Soon)"
 }

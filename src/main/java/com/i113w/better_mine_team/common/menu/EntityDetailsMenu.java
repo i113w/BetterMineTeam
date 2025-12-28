@@ -1,5 +1,7 @@
 package com.i113w.better_mine_team.common.menu;
 
+import com.i113w.better_mine_team.BetterMineTeam;
+import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.registry.ModMenuTypes;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.Container;
@@ -24,19 +26,18 @@ public class EntityDetailsMenu extends AbstractContainerMenu {
 
     private final LivingEntity targetEntity;
 
-    // 客户端构造器
     public EntityDetailsMenu(int containerId, Inventory playerInv, FriendlyByteBuf extraData) {
         this(containerId, playerInv, getClientEntity(playerInv, extraData));
     }
 
-    // 服务端构造器
     public EntityDetailsMenu(int containerId, Inventory playerInv, LivingEntity entity) {
         super(ModMenuTypes.ENTITY_DETAILS_MENU.get(), containerId);
         this.targetEntity = entity;
 
         if (entity == null) return;
 
-        // === 左侧面板 (Left Panel) ===
+        // === 1. 左侧面板：通用装备栏 (所有生物都有) ===
+        // 直接操作实体装备槽，不依赖 Capability，确保能给村民穿装备
         addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.HEAD, 60, 17));
         addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.CHEST, 60, 35));
         addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.LEGS, 60, 53));
@@ -44,49 +45,64 @@ public class EntityDetailsMenu extends AbstractContainerMenu {
         addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.MAINHAND, 7, 93));
         addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.OFFHAND, 25, 93));
 
-        // === 右侧面板 (Right Panel) ===
+        // === 2. 右侧面板：物品栏区域 ===
         int gridStartX = 84;
         int gridStartY = 17;
 
-        // 【核心修改】针对村民使用原生 Container 访问
         if (entity instanceof Villager villager) {
+            // 村民逻辑：混合布局
             layoutVillagerInventory(villager, gridStartX, gridStartY);
         } else {
-            // 其他生物继续使用 Capability
+            // 其他生物逻辑：标准 Capability 布局
             IItemHandler entityInv = getUnifiedInventory(entity);
             layoutStandardInventory(entityInv, gridStartX, gridStartY);
         }
 
-        // 玩家背包
+        // === 3. 玩家背包 ===
         for (int row = 0; row < 3; ++row) {
             for (int col = 0; col < 9; ++col) {
                 this.addSlot(new Slot(playerInv, col + row * 9 + 9, 84 + col * 18, 103 + row * 18));
             }
         }
-        // 玩家快捷栏
+        // === 4. 玩家快捷栏 ===
         for (int col = 0; col < 9; ++col) {
             this.addSlot(new Slot(playerInv, col, 84 + col * 18, 161));
         }
     }
 
     /**
-     * 村民专用布局：直接使用原生 Slot 和 SimpleContainer
+     * 村民专用混合布局
+     * 前3行：尝试显示 Capability (如果有)
+     * 第4行：显示村民原生 8 格背包
      */
     private void layoutVillagerInventory(Villager villager, int startX, int startY) {
-        // 获取原生容器 (SimpleContainer)
-        SimpleContainer container = villager.getInventory();
+        // 获取 Capability (用于前3行)
+        IItemHandler capabilityHandler = getUnifiedInventory(villager);
+        // 获取原生 Inventory (用于第4行)
+        SimpleContainer villagerContainer = villager.getInventory();
 
         for (int row = 0; row < 4; ++row) {
             for (int col = 0; col < 9; ++col) {
                 int x = startX + col * 18;
                 int y = startY + row * 18;
 
-                // 只有第4行前8格是有效的
-                if (row == 3 && col < 8) {
-                    // 使用自定义的 VillagerSlot 来确保数据保存
-                    this.addSlot(new VillagerSlot(villager, container, col, x, y));
-                } else {
-                    this.addSlot(new DisabledSlot(x, y));
+                // === 前3行 (Row 0-2)：显示 Capability ===
+                if (row < 3) {
+                    int slotIndex = col + row * 9;
+                    // 如果 Capability 有足够的槽位，就显示
+                    if (slotIndex < capabilityHandler.getSlots()) {
+                        this.addSlot(new SlotItemHandler(capabilityHandler, slotIndex, x, y));
+                    } else {
+                        this.addSlot(new DisabledSlot(x, y));
+                    }
+                }
+                // === 第4行 (Row 3)：显示村民原生背包 ===
+                else {
+                    if (col < 8) { // 村民背包只有 8 格
+                        this.addSlot(new VillagerSlot(villager, villagerContainer, col, x, y));
+                    } else {
+                        this.addSlot(new DisabledSlot(x, y));
+                    }
                 }
             }
         }
@@ -119,15 +135,40 @@ public class EntityDetailsMenu extends AbstractContainerMenu {
     }
 
     private static LivingEntity getClientEntity(Inventory playerInv, FriendlyByteBuf data) {
-        int entityId = data.readInt();
-        net.minecraft.world.entity.Entity entity = playerInv.player.level().getEntity(entityId);
-        if (entity instanceof LivingEntity living) return living;
-        return playerInv.player;
+        try {
+            int entityId = data.readInt();
+
+            // 1. 基础空值检查
+            if (playerInv.player == null || playerInv.player.level() == null) {
+                return playerInv.player; // 安全回退
+            }
+
+            // 2. 获取实体
+            net.minecraft.world.entity.Entity entity = playerInv.player.level().getEntity(entityId);
+
+            // 3. 验证实体有效性 (必须是 LivingEntity 且 活着)
+            if (entity instanceof LivingEntity living && living.isAlive()) {
+                return living;
+            }
+
+            // 4. 如果找不到或已死亡，回退到玩家自己，防止 GUI 崩溃
+            return playerInv.player;
+
+        } catch (Exception e) {
+            BetterMineTeam.LOGGER.error("Error getting client entity for details menu", e);
+            return playerInv.player;
+        }
     }
 
+
     @Override
+
     public boolean stillValid(@NotNull Player player) {
-        return targetEntity != null && targetEntity.isAlive();
+        // 检查：实体存在 + 活着 + 未被移除 + 在配置距离内
+        return targetEntity != null
+                && targetEntity.isAlive()
+                && !targetEntity.isRemoved()
+                && targetEntity.distanceToSqr(player) < BMTConfig.getRemoteInventoryRangeSqr();
     }
 
     @Override
@@ -165,31 +206,11 @@ public class EntityDetailsMenu extends AbstractContainerMenu {
         @Override public int getMaxStackSize() { return 1; }
     }
 
-    /**
-     * 【新增】村民专用 Slot
-     * 作用：在物品变动时强制标记村民实体为 Dirty，确保数据保存。
-     */
     public static class VillagerSlot extends Slot {
-        // 移除未使用的 villager 字段，因为我们不需要调用它的方法了
-        // private final Villager villager;
-
-        public VillagerSlot(Villager villager, Container container, int slot, int x, int y) {
+        public VillagerSlot(Villager villager, net.minecraft.world.Container container, int slot, int x, int y) {
             super(container, slot, x, y);
-            // this.villager = villager;
         }
-
-        @Override
-        public void setChanged() {
-            // 调用父类方法，它会执行 container.setChanged()
-            // 这对于 SimpleContainer 来说已经足够触发更新了
-            super.setChanged();
-        }
-
-        @Override
-        public boolean mayPlace(ItemStack stack) {
-            // 允许玩家放入任何物品
-            return true;
-        }
+        @Override public void setChanged() { super.setChanged(); }
+        @Override public boolean mayPlace(ItemStack stack) { return true; }
     }
-
 }

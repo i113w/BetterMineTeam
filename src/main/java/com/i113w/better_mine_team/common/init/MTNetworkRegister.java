@@ -1,9 +1,7 @@
 package com.i113w.better_mine_team.common.init;
 
 import com.i113w.better_mine_team.BetterMineTeam;
-import com.i113w.better_mine_team.common.network.OpenTeamGuiPayload;
-import com.i113w.better_mine_team.common.network.TeamActionPayload;
-import com.i113w.better_mine_team.common.network.TeamManagementPayload;
+import com.i113w.better_mine_team.common.network.*;
 import net.neoforged.bus.api.SubscribeEvent; // 这个注解可以保留，也可以去掉，手动注册时不需要它
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
@@ -30,11 +28,25 @@ public class MTNetworkRegister {
                 OpenTeamGuiPayload::clientHandle
         );
 
-        // 3. TeamManagementPayload (C -> S)
-        registrar.playToServer(
+        // 3. TeamManagementPayload (Bidirectional)
+        // [修复] 使用单个 handle 方法作为入口，内部根据 PacketFlow 分流
+        registrar.playBidirectional(
                 TeamManagementPayload.TYPE,
                 TeamManagementPayload.STREAM_CODEC,
-                TeamManagementPayload::serverHandle
+                TeamManagementPayload::handle
+        );
+
+        registrar.playToServer(
+                DragonControllerPayload.TYPE,
+                DragonControllerPayload.STREAM_CODEC,
+                DragonControllerPayload::serverHandle
+        );
+
+        registrar.playToServer(
+                DragonDismountPayload.TYPE,
+                DragonDismountPayload.STREAM_CODEC,
+                DragonDismountPayload::serverHandle
         );
     }
+
 }

@@ -23,6 +23,10 @@ import java.util.List;
 
 public class TeamManagementScreen extends Screen {
 
+    // 缓存 Map，用于追踪已存在的 Entry
+    private final java.util.Map<java.util.UUID, TeamMemberEntry> entryCache = new java.util.HashMap<>();
+    private String lastKnownTeamName = null;
+
     private static final ResourceLocation BG_TEXTURE = ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "textures/gui/management_bg.png");
 
     // 1. 纹理尺寸 (256x256)
@@ -120,57 +124,101 @@ public class TeamManagementScreen extends Screen {
         if (this.minecraft == null || this.minecraft.level == null || this.minecraft.player == null) return;
 
         PlayerTeam myTeam = TeamManager.getTeam(this.minecraft.player);
+
+        // 情况1: 玩家没有队伍
         if (myTeam == null) {
-            this.memberList.clearMembers();
+            if (!entryCache.isEmpty()) {
+                this.memberList.clearMembers();
+                entryCache.clear();
+                lastKnownTeamName = null;
+            }
             return;
         }
 
-        // 1. 获取最新数据快照
-        List<LivingEntity> currentMembers = new ArrayList<>();
+        // 情况2: 玩家换队了 (完全重置)
+        if (!myTeam.getName().equals(lastKnownTeamName)) {
+            this.memberList.clearMembers();
+            entryCache.clear();
+            lastKnownTeamName = myTeam.getName();
+        }
+
+        // 收集当前世界中属于该队伍的实体 UUID
+        java.util.Set<java.util.UUID> currentUUIDs = new java.util.HashSet<>();
+        List<LivingEntity> newMembers = new ArrayList<>();
+
         for (Entity entity : this.minecraft.level.entitiesForRendering()) {
             if (entity instanceof LivingEntity living) {
                 PlayerTeam entityTeam = TeamManager.getTeam(living);
                 if (entityTeam != null && entityTeam.getName().equals(myTeam.getName())) {
-                    currentMembers.add(living);
+                    java.util.UUID uuid = living.getUUID();
+                    currentUUIDs.add(uuid);
+
+                    // 如果缓存里没有，说明是新成员
+                    if (!entryCache.containsKey(uuid)) {
+                        newMembers.add(living);
+                    }
                 }
             }
         }
 
-        // 2. 简单的 Diff 检测 (性能优化)
-        // 如果数量没变，且第一个和最后一个元素ID没变，大概率列表没变，跳过重建
-        // (这能防止滚动条在自动刷新时莫名其妙跳回顶部)
-        //if (currentMembers.size() == this.memberList.getItemCount()) {
-            // 这里可以做更深度的比较，但为了性能，暂且认为数量一致且不频繁变动时无需重绘
-            // 如果需要严格一致，可以比较所有 UUID，但开销较大
-            // 建议：仅当确实发生踢人操作后，数量变化了，才触发重绘
-            //return;
-        //}
-
-        // 注意：上面的 Diff 检测有一个小缺陷，如果踢了一个人又进了一个人，数量不变但人变了。
-        // 为了绝对稳妥（解决您说的踢人刷新问题），我们先移除这个 Diff 锁，或者采用更智能的比较。
-        // 修正方案：直接重建，但尝试保持滚动条位置。
-
-        double scrollAmount = this.memberList.getScrollAmount(); // 记录滚动位置
-
-        this.memberList.clearMembers();
-
-        // 排序
-        currentMembers.sort((e1, e2) -> {
-            boolean p1 = e1 instanceof Player;
-            boolean p2 = e2 instanceof Player;
-            if (p1 != p2) return p1 ? 1 : -1;
-            return e1.getName().getString().compareToIgnoreCase(e2.getName().getString());
+        // 1. 移除已离队的成员 (在缓存中但不在当前 UUID 集合中)
+        boolean removedAny = entryCache.keySet().removeIf(uuid -> {
+            if (!currentUUIDs.contains(uuid)) {
+                // 从 GUI 列表中移除
+                TeamMemberEntry entry = entryCache.get(uuid);
+                // TeamMemberList 需要暴露 removeEntry 方法，或者我们直接操作 children
+                // 假设 TeamMemberList 继承自 ObjectSelectionList，它有 removeEntry 方法
+                this.memberList.removeEntry(entry);
+                return true;
+            }
+            return false;
         });
 
-        for (LivingEntity member : currentMembers) {
-            this.memberList.addMember(new TeamMemberEntry(member, this.memberList));
+        // 2. 添加新成员
+        boolean addedAny = !newMembers.isEmpty();
+        if (addedAny) {
+            for (LivingEntity member : newMembers) {
+                TeamMemberEntry entry = new TeamMemberEntry(member, this.memberList);
+                entryCache.put(member.getUUID(), entry);
+                this.memberList.addMember(entry);
+            }
         }
 
-        this.memberList.setScrollAmount(scrollAmount); // 恢复滚动位置
+        // 3. 仅当列表发生变动时，重新排序并保持滚动位置
+        if (removedAny || addedAny) {
+            double scrollAmount = this.memberList.getScrollAmount();
+            sortMembers();
+            this.memberList.setScrollAmount(scrollAmount);
+        }
+    }
+
+    // [新增] 排序辅助方法
+    private void sortMembers() {
+        // 获取当前所有 Entry
+        List<TeamMemberEntry> entries = new ArrayList<>(this.memberList.getEntries());
+
+        entries.sort((e1, e2) -> {
+            LivingEntity entity1 = e1.getMember(); // 调用刚才在 Entry 中添加的 getter
+            LivingEntity entity2 = e2.getMember();
+
+            // 玩家排在前面
+            boolean p1 = entity1 instanceof Player;
+            boolean p2 = entity2 instanceof Player;
+            if (p1 != p2) return p1 ? 1 : -1;
+
+            // 按名字排序
+            return entity1.getName().getString().compareToIgnoreCase(entity2.getName().getString());
+        });
+
+        // 清空并重新添加 (ObjectSelectionList 没有直接的 replaceEntries，只能 clear + add)
+        this.memberList.clearMembers();
+        for (TeamMemberEntry entry : entries) {
+            this.memberList.addMember(entry);
+        }
     }
 
 
-    private int tickCounter = 0;
+private int tickCounter = 0;
     @Override
     public void tick() {
         super.tick();

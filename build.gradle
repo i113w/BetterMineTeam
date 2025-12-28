@@ -28,7 +28,7 @@ neoForge {
     }
 
     // This line is optional. Access Transformers are automatically detected
-    // accessTransformers.add('src/main/resources/META-INF/accesstransformer.cfg')
+    //accessTransformers.add('src/main/resources/META-INF/accesstransformer.cfg')
 
     // Default run configurations.
     // These can be tweaked, removed, or duplicated as needed.
@@ -116,26 +116,24 @@ repositories {
 }
 
 dependencies {
+    // Guard Villagers 核心依赖
+    // 项目 ID: 360203 | 文件 ID (v2.4.5 for 1.21.1 NeoForge): 7306932
+    // 使用 implementation 确保你可以在代码里引用它的类，且测试时会自动加载
+    implementation "curse.maven:guard-villagers-360203:7306932"
+
+    // 注意：Guard Villagers 通常依赖 Cloth Config，如果测试时报错缺少该模组，请取消下方注释
+    // runtimeOnly "curse.maven:cloth-config-306345:5701268"
+
+    // 你之前的 FTB 相关依赖建议改为 implementation，否则测试时不会加载进入游戏
+    // compileOnly 仅在编译时有效，不会把模组带入测试运行环境
     compileOnly "curse.maven:ftb-teams-forge-404468:6119437"
     compileOnly "curse.maven:ftb-library-forge-404465:6016745"
-//    runtimeOnly "curse.maven:ftb-teams-forge-404468:6119437"
-//    runtimeOnly "curse.maven:ftb-library-forge-404465:6016745"
-//    runtimeOnly "dev.architectury:architectury-neoforge:13.0.8"
 
-    // Example mod dependency using a mod jar from ./libs with a flat dir repository
-    // This maps to ./libs/coolmod-${mc_version}-${coolmod_version}.jar
-    // The group id is ignored when searching -- in this case, it is "blank"
-    // implementation "blank:coolmod-${mc_version}:${coolmod_version}"
 
-    // Example mod dependency using a file as dependency
-    // implementation files("libs/coolmod-${mc_version}-${coolmod_version}.jar")
+    implementation files("libs/dragonfight-1.21-4.7.jar")
+    implementation files("libs/edf-remastered-5.0-beta4.jar")
+    implementation files("libs/cupboard-1.21-2.9.jar")
 
-    // Example project dependency using a sister or child project:
-    // implementation project(":myproject")
-
-    // For more info:
-    // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html
-    // http://www.gradle.org/docs/current/userguide/dependency_management.html
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.

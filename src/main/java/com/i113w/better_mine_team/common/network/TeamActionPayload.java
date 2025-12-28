@@ -1,6 +1,7 @@
 package com.i113w.better_mine_team.common.network;
 
 import com.i113w.better_mine_team.BetterMineTeam;
+import com.i113w.better_mine_team.common.team.TeamDataStorage;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -13,7 +14,7 @@ import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
-import org.jetbrains.annotations.NotNull; // 1. 导入注解
+import org.jetbrains.annotations.NotNull;
 
 public record TeamActionPayload(int action, String data, boolean state) implements CustomPacketPayload {
 
@@ -27,7 +28,7 @@ public record TeamActionPayload(int action, String data, boolean state) implemen
     );
 
     @Override
-    @NotNull // 2. 修复：添加非空注解
+    @NotNull
     public Type<? extends CustomPacketPayload> type() {
         return TYPE;
     }
@@ -35,8 +36,6 @@ public record TeamActionPayload(int action, String data, boolean state) implemen
     public static void serverHandle(final TeamActionPayload payload, final IPayloadContext context) {
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer player)) return;
-
-            // 3. 修复：防止 player.getServer() 返回 null 导致空指针
             MinecraftServer server = player.getServer();
             if (server == null) return;
 
@@ -44,22 +43,30 @@ public record TeamActionPayload(int action, String data, boolean state) implemen
 
             // Action 0: 切换队伍
             if (payload.action == 0) {
-                // 4. 修复：移除冗余变量 colorName，直接使用 payload.data
                 DyeColor color = DyeColor.byName(payload.data, null);
 
                 if (color != null) {
-                    String teamName = TeamManager.getTeamName(color);
-                    PlayerTeam team = scoreboard.getPlayerTeam(teamName);
+                    String newTeamName = TeamManager.getTeamName(color);
+                    PlayerTeam newTeam = scoreboard.getPlayerTeam(newTeamName);
 
-                    if (team != null) {
-                        scoreboard.addPlayerToTeam(player.getScoreboardName(), team);
+                    if (newTeam != null) {
+                        // [新增] 检查玩家是否是当前队伍的队长，如果是，则清除
+                        PlayerTeam currentTeam = TeamManager.getTeam(player);
+                        TeamDataStorage storage = TeamDataStorage.get(player.serverLevel());
+
+                        if (currentTeam != null && storage.isCaptain(player)) {
+                            storage.removeCaptain(currentTeam.getName());
+                            // 可以选择给玩家发个消息提示已卸任，或者静默处理
+                        }
+
+                        // 加入新队伍
+                        scoreboard.addPlayerToTeam(player.getScoreboardName(), newTeam);
                     }
                 }
             }
             // Action 1: 切换 PvP 状态
             else if (payload.action == 1) {
                 PlayerTeam team = scoreboard.getPlayersTeam(player.getScoreboardName());
-                // 兼容性修改：只要有队伍就能改，不再强制检查前缀
                 if (team != null) {
                     team.setAllowFriendlyFire(payload.state);
                 }

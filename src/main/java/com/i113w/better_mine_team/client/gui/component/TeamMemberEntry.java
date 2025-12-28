@@ -31,6 +31,17 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
     public TeamMemberEntry(LivingEntity member, TeamMemberList parent) {
         this.member = member;
         this.parent = parent;
+
+    }
+
+    // [新增] 缓存字段
+    private String cachedStatus = "";
+    private float cachedHp = -1;
+    private float cachedMaxHp = -1;
+
+    // [新增] Getter 用于排序优化 (方案A需要)
+    public LivingEntity getMember() {
+        return member;
     }
 
     @Override
@@ -54,11 +65,20 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
         // 4. 【修改】HP 显示格式: "HP: 20/20"
         float currentHp = member.getHealth();
         float maxHp = member.getMaxHealth();
-        // 颜色逻辑：血量低变红
-        int hpColor = (currentHp / maxHp < 0.3) ? 0xFF5555 : 0xAAAAAA;
-        String status = String.format("HP: %.0f/%.0f", currentHp, maxHp);
 
-        gfx.drawString(Minecraft.getInstance().font, status, textLeft, top + 18, hpColor);
+        // 只有数值变化时才重新生成字符串
+        // 使用 Math.abs 比较浮点数，或者直接 != (因为 getHealth 返回值通常稳定)
+        if (Math.abs(currentHp - cachedHp) > 0.01f || Math.abs(maxHp - cachedMaxHp) > 0.01f) {
+            cachedHp = currentHp;
+            cachedMaxHp = maxHp;
+            // 使用 StringBuilder 或直接拼接，避免 String.format 的正则开销
+            cachedStatus = "HP: " + Math.round(currentHp) + "/" + Math.round(maxHp);
+        }
+
+        // 颜色逻辑：血量低变红
+        int hpColor = (maxHp > 0 && currentHp / maxHp < 0.3) ? 0xFF5555 : 0xAAAAAA;
+
+        gfx.drawString(Minecraft.getInstance().font, cachedStatus, textLeft, top + 18, hpColor);
 
         // 5. 快捷按钮渲染 (仅队长可见，且不能对自己操作)
         // 我们需要判断当前客户端玩家是否是队长
