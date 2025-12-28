@@ -116,23 +116,9 @@ repositories {
 }
 
 dependencies {
-    // Guard Villagers 核心依赖
-    // 项目 ID: 360203 | 文件 ID (v2.4.5 for 1.21.1 NeoForge): 7306932
-    // 使用 implementation 确保你可以在代码里引用它的类，且测试时会自动加载
-    implementation "curse.maven:guard-villagers-360203:7306932"
 
-    // 注意：Guard Villagers 通常依赖 Cloth Config，如果测试时报错缺少该模组，请取消下方注释
-    // runtimeOnly "curse.maven:cloth-config-306345:5701268"
-
-    // 你之前的 FTB 相关依赖建议改为 implementation，否则测试时不会加载进入游戏
-    // compileOnly 仅在编译时有效，不会把模组带入测试运行环境
     compileOnly "curse.maven:ftb-teams-forge-404468:6119437"
     compileOnly "curse.maven:ftb-library-forge-404465:6016745"
-
-
-    implementation files("libs/dragonfight-1.21-4.7.jar")
-    implementation files("libs/edf-remastered-5.0-beta4.jar")
-    implementation files("libs/cupboard-1.21-2.9.jar")
 
 }
 
