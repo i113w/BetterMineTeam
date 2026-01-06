@@ -43,7 +43,7 @@ neoForge {
             // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
             //玩家名字
-            programArguments = ["--username", "HuNao"]
+            programArguments = ["--username", "113"]
         }
 
         server {

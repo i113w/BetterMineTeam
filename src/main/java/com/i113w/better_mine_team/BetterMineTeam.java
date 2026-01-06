@@ -19,27 +19,24 @@ import com.i113w.better_mine_team.common.init.MTNetworkRegister;
 import com.i113w.better_mine_team.common.registry.ModMenuTypes;
 import net.neoforged.fml.loading.FMLEnvironment;
 
-
 @Mod(BetterMineTeam.MODID)
 public class BetterMineTeam {
     public static final String MODID = "better_mine_team";
     public static final Logger LOGGER = LogUtils.getLogger();
-    // 检查兼容性模组是否存在
     public static final boolean IS_CONFLUENCE_LOADED = ModList.get().isLoaded("confluence");
 
     public BetterMineTeam(IEventBus modEventBus, ModContainer modContainer) {
-        // 核心修改：删除了附件类型的注册，因为我们改用了原版计分板
-        // MTAttachmentTypes.ATTACHMENT_TYPES.register(modEventBus);
-
         modEventBus.addListener(this::onFMLCommonSetup);
 
         // 注册配置文件
         modContainer.registerConfig(ModConfig.Type.COMMON, BMTConfig.CONFIG, "better_mine_team.toml");
         modEventBus.addListener(MTNetworkRegister::registerPayload);
         ModMenuTypes.register(modEventBus);
-        modEventBus.addListener(ClientSetup::registerScreens);
 
+        // 将屏幕注册移动到 if (CLIENT) 代码块内部
+        // 这样服务器永远不会尝试加载 ClientSetup 类，也就不会触发 Screen 类缺失的错误
         if (FMLEnvironment.dist == Dist.CLIENT) {
+            modEventBus.addListener(ClientSetup::registerScreens);
             modEventBus.addListener(ModKeyMappings::onRegisterKeyMappings);
         }
     }

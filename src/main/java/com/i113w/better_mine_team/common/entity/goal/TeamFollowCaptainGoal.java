@@ -25,7 +25,6 @@ public class TeamFollowCaptainGoal extends Goal {
     private final PathNavigation navigation;
     private int timeToRecalcPath;
     private int failedPathAttempts = 0;
-    private static final int MAX_FAILED_ATTEMPTS = 5;
 
     private int debugCooldown = 0;
 
@@ -107,13 +106,22 @@ public class TeamFollowCaptainGoal extends Goal {
 
         if (--this.timeToRecalcPath <= 0) {
             this.timeToRecalcPath = 10;
+
             if (!this.mob.isLeashed() && !this.mob.isPassenger()) {
+                // 特殊移动生物直接跳过寻路
+                if (isSpecialMovementMob(this.mob)) {
+                    this.mob.getMoveControl().setWantedPosition(
+                            this.captain.getX(), this.captain.getY(), this.captain.getZ(), this.speedModifier
+                    );
+                    return;
+                }
+
                 boolean pathFound = this.navigation.moveTo(this.captain, this.speedModifier);
 
                 if (!pathFound) failedPathAttempts++;
                 else failedPathAttempts = 0;
 
-                if (isSpecialMovementMob(this.mob) || failedPathAttempts >= MAX_FAILED_ATTEMPTS) {
+                if (failedPathAttempts >= BMTConfig.getFollowPathFailThreshold()) {
                     this.mob.getMoveControl().setWantedPosition(
                             this.captain.getX(), this.captain.getY(), this.captain.getZ(), this.speedModifier
                     );
@@ -124,6 +132,13 @@ public class TeamFollowCaptainGoal extends Goal {
 
     private boolean isSpecialMovementMob(Mob mob) {
         String className = mob.getClass().getSimpleName();
-        return className.contains("Slime") || className.contains("MagmaCube") || className.contains("Ghast") || className.contains("Phantom");
+        // 1. 史莱姆类
+        if (className.contains("Slime") || className.contains("MagmaCube")) return true;
+        // 2. 飞行/漂浮类
+        if (className.contains("Ghast") || className.contains("Phantom") || className.contains("Allay") || className.contains("Vex")) return true;
+        // 3. 其他特殊移动类
+        if (className.contains("Bee") || className.contains("Bat") || className.contains("Parrot")) return true;
+
+        return false;
     }
 }

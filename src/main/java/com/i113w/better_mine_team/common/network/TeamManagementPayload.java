@@ -1,4 +1,6 @@
 package com.i113w.better_mine_team.common.network;
+
+// ... 保留原有的 Common Imports (World, Entity, Player 等) ...
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.menu.EntityDetailsMenu;
 import com.i113w.better_mine_team.common.team.TeamDataStorage;
@@ -18,22 +20,25 @@ import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.NotNull;
+
+// [注意] 检查这里，绝对不能有 net.minecraft.client.* 的导入！
+// 如果有，请删除。
+
 public record TeamManagementPayload(int actionType, int targetEntityId, String extraData) implements CustomPacketPayload {
-    // Action Types
+    // ... 常量定义保持不变 ...
     public static final int ACTION_TELEPORT = 1;
     public static final int ACTION_TOGGLE_FOLLOW = 2;
     public static final int ACTION_KICK = 3;
     public static final int ACTION_RENAME = 4;
     public static final int ACTION_SET_CAPTAIN = 5;
     public static final int ACTION_OPEN_INVENTORY = 6;
-    public static final int ACTION_SYNC_FOLLOW_STATE = 7; // [新增] 状态同步
+    public static final int ACTION_SYNC_FOLLOW_STATE = 7;
 
     public static final Type<TeamManagementPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "team_manage"));
 
@@ -50,9 +55,6 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
         return TYPE;
     }
 
-    /**
-     * 统一处理入口，解决 playBidirectional 参数问题
-     */
     public static void handle(final TeamManagementPayload payload, final IPayloadContext context) {
         if (context.flow() == PacketFlow.CLIENTBOUND) {
             clientHandle(payload, context);
@@ -61,8 +63,8 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
         }
     }
 
-    // --- 服务端逻辑 (C -> S) ---
     private static void serverHandle(final TeamManagementPayload payload, final IPayloadContext context) {
+        // ... 服务端逻辑保持不变 (完全安全，因为这里用的都是 ServerPlayer / ServerLevel) ...
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer player)) return;
             ServerLevel level = player.serverLevel();
@@ -152,11 +154,17 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
         });
     }
 
-    // --- 客户端逻辑 (S -> C) ---
+    // 客户端处理逻辑
     private static void clientHandle(final TeamManagementPayload payload, final IPayloadContext context) {
         context.enqueueWork(() -> {
-            // [安全修复] 使用 context.player() 获取客户端玩家，避免直接调用 Minecraft.getInstance() 导致服务端崩溃
-            Player player = context.player();
+            ClientHandler.handle(payload, context);
+        });
+    }
+
+    // 内部类隔离
+    private static class ClientHandler {
+        static void handle(TeamManagementPayload payload, IPayloadContext context) {
+            net.minecraft.world.entity.player.Player player = context.player();
             if (player == null) return;
             Level level = player.level();
             if (level == null) return;
@@ -168,9 +176,10 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
                     entity.getPersistentData().putBoolean("bmt_follow_enabled", newState);
                 }
             }
-        });
+        }
     }
 
+    // ... 辅助方法 ...
     private static void sendPermissionError(ServerPlayer player) {
         player.displayClientMessage(Component.translatable("better_mine_team.msg.permission_denied").withStyle(ChatFormatting.RED), true);
     }

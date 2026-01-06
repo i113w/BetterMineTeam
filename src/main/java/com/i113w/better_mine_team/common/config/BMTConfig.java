@@ -52,6 +52,9 @@ public class BMTConfig {
     private static final Set<EntityType<?>> blacklistedCache = new HashSet<>();
     private static final ModConfigSpec.DoubleValue dragonMaxPitch;
 
+    // [新增] 寻路失败阈值
+    private static final ModConfigSpec.IntValue followPathFailThreshold;
+
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
 
@@ -97,6 +100,11 @@ public class BMTConfig {
         guardFollowStopDist = builder
                 .comment("Distance at which the entity stops following the captain.")
                 .defineInRange("guardFollowStopDist", 2.0, 1.0, 16.0);
+
+        followPathFailThreshold = builder
+                .comment("How many failed pathfinding attempts before using direct movement.")
+                .comment("Lower values make mobs 'stuck' less often but might cause clipping through walls.")
+                .defineInRange("followPathFailThreshold", 5, 1, 20);
         builder.pop();
 
         builder.push("dragon");
@@ -235,4 +243,5 @@ public class BMTConfig {
         return tamingMaterialMap.getOrDefault(entityType, cachedDefaultIngredient);
     }
     public static float getDragonMaxPitch() { return dragonMaxPitch.get().floatValue(); }
+    public static int getFollowPathFailThreshold() { return followPathFailThreshold.get(); }
 }

@@ -13,6 +13,7 @@ bin/
 .idea/shelf
 .idea
 .vscode
+.gitattributes
 # 其他 IDEA 文件可以保留，方便别人导入项目
 *.iml
 *.ipr
