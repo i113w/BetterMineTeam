@@ -70,6 +70,7 @@ public class MobTeamEventSubscriber {
         }
 
         if (target instanceof LivingEntity livingEntity) {
+            if (!BMTConfig.isMobTamingEnabled()) return;
             Ingredient tamingMaterial = BMTConfig.getTamingMaterial(target.getType());
 
             if (!itemstack.isEmpty() && tamingMaterial.test(itemstack)) {
@@ -126,6 +127,7 @@ public class MobTeamEventSubscriber {
         }
 
         if (BMTConfig.isDragonTamingEnabled()) {
+            if (!BMTConfig.isMobTamingEnabled()) return;
             // [修改] 使用新的配置方法
             Ingredient tamingMaterial = BMTConfig.getTamingMaterial(dragon.getType());
 

@@ -15,6 +15,7 @@ import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import org.slf4j.Logger;
 import com.i113w.better_mine_team.common.init.MTNetworkRegister;
+import net.neoforged.fml.event.config.ModConfigEvent;
 
 import com.i113w.better_mine_team.common.registry.ModMenuTypes;
 import net.neoforged.fml.loading.FMLEnvironment;
@@ -39,6 +40,8 @@ public class BetterMineTeam {
             modEventBus.addListener(ClientSetup::registerScreens);
             modEventBus.addListener(ModKeyMappings::onRegisterKeyMappings);
         }
+        modEventBus.addListener(this::onConfigLoad);
+        modEventBus.addListener(this::onConfigReload);
     }
 
     public static ResourceLocation asResource(String path) {
@@ -47,13 +50,22 @@ public class BetterMineTeam {
 
     @SubscribeEvent
     public void onFMLCommonSetup(FMLCommonSetupEvent event) {
-        // 初始化驯服材料配置
-        BMTConfig.loadTamingMaterials();
     }
 
     public static void debug(String message, Object... params) {
         if (BMTConfig.isDebugEnabled()) {
             LOGGER.info("[BMT-DEBUG] " + message, params);
+        }
+    }
+    public void onConfigLoad(ModConfigEvent.Loading event) {
+        if (event.getConfig().getSpec() == BMTConfig.CONFIG) {
+            BMTConfig.loadTamingMaterials();
+        }
+    }
+    public void onConfigReload(ModConfigEvent.Reloading event) {
+        if (event.getConfig().getSpec() == BMTConfig.CONFIG) {
+            LOGGER.info("Config reloaded, refreshing taming materials...");
+            BMTConfig.loadTamingMaterials();
         }
     }
 }

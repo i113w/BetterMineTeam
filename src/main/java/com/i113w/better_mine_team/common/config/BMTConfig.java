@@ -8,6 +8,9 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.common.ModConfigSpec;
+import com.i113w.better_mine_team.BetterMineTeam;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 
 import java.util.HashSet;
 import java.util.List;
@@ -21,6 +24,8 @@ public class BMTConfig {
     private static final ModConfigSpec.IntValue teamHateMemoryDuration;
     private static final ModConfigSpec.BooleanValue enableDebugLogging;
     private static final ModConfigSpec.DoubleValue remoteInventoryRange;
+    private static final ModConfigSpec.BooleanValue enableMobTaming;
+    private static final ModConfigSpec.BooleanValue showInventoryTeamButtons;
 
     // AI 参数
     private static final ModConfigSpec.DoubleValue guardFollowRange;
@@ -74,6 +79,10 @@ public class BMTConfig {
         enableDebugLogging = builder
                 .comment("Enable console debug logging for team logic.")
                 .define("enableDebugLogging", false);
+
+        showInventoryTeamButtons = builder
+                .comment("Whether to show the Team/PvP buttons in the inventory screen.")
+                .define("showInventoryTeamButtons", true);
         builder.pop();
 
         builder.push("ai");
@@ -122,6 +131,10 @@ public class BMTConfig {
         builder.pop();
 
         builder.push("taming");
+        enableMobTaming = builder
+                .comment("Whether to allow players to tame mobs using items.")
+                .comment("Set to false to disable taming functionality entirely (existing pets remain).")
+                .define("enableMobTaming", true);
         defaultTamingMaterial = builder
                 .comment("Default item/tag used to tame mobs if not specified in the list below.")
                 .comment("Example: 'minecraft:golden_apple' or '#minecraft:flowers'")
@@ -129,7 +142,6 @@ public class BMTConfig {
 
         dragonTamingMaterial = builder
                 .comment("Specific item/tag used to tame the Ender Dragon.")
-                .comment("末影龙专用驯服材料。默认：金苹果")
                 .define("dragonTamingMaterial", "minecraft:golden_apple");
 
         blacklistedEntities = builder
@@ -168,20 +180,37 @@ public class BMTConfig {
         }
 
         tamingMaterialMap.clear();
-        for (String material : tamingMaterials.get()) {
+        List<? extends String> materials = tamingMaterials.get();
+
+        for (String entry : materials) {
             try {
-                String[] split = material.split("-", 2);
-                if (split.length == 2) {
-                    ResourceLocation entityId = ResourceLocation.tryParse(split[0]);
-                    if (entityId != null) {
-                        BuiltInRegistries.ENTITY_TYPE.getOptional(entityId).ifPresent(entityType -> {
-                            Ingredient.CODEC_NONEMPTY.parse(JsonOps.INSTANCE, new com.google.gson.JsonPrimitive(split[1]))
-                                    .result().ifPresent(ingredient -> tamingMaterialMap.put(entityType, ingredient));
-                        });
-                    }
+                String[] split = entry.split("-", 2);
+                if (split.length != 2) {
+                    BetterMineTeam.LOGGER.warn("Invalid format for taming material: '{}'. Use 'entity_id-json_ingredient'", entry);
+                    continue;
                 }
-            } catch (Exception ignored) {}
+
+                ResourceLocation entityId = ResourceLocation.tryParse(split[0]);
+                String jsonString = split[1];
+
+                if (entityId != null) {
+                    BuiltInRegistries.ENTITY_TYPE.getOptional(entityId).ifPresentOrElse(entityType -> {
+                        try {
+                            JsonElement jsonElement = JsonParser.parseString(jsonString);
+                            Ingredient.CODEC_NONEMPTY.parse(JsonOps.INSTANCE, jsonElement)
+                                    .resultOrPartial(err -> BetterMineTeam.LOGGER.error("Failed to parse ingredient JSON for {}: {}", entityId, err))
+                                    .ifPresent(ingredient -> {
+                                        tamingMaterialMap.put(entityType, ingredient);
+                                    });
+                        } catch (Exception e) {
+                            BetterMineTeam.LOGGER.error("JSON syntax error for {}: {}", entityId, e.getMessage());
+                        }
+                    }, () -> BetterMineTeam.LOGGER.warn("Entity type not found: {}", entityId));
+                }
+            }
+            catch (Exception ignored) {}
         }
+
     }
 
     private static void loadDefaultMaterial() {
@@ -244,4 +273,6 @@ public class BMTConfig {
     }
     public static float getDragonMaxPitch() { return dragonMaxPitch.get().floatValue(); }
     public static int getFollowPathFailThreshold() { return followPathFailThreshold.get(); }
+    public static boolean isMobTamingEnabled() { return enableMobTaming.get(); }
+    public static boolean isShowInventoryTeamButtons() { return showInventoryTeamButtons.get(); }
 }

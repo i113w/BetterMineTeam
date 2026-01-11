@@ -2,6 +2,7 @@ package com.i113w.better_mine_team.client.gui;
 
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.client.gui.team.TeamRender;
+import com.i113w.better_mine_team.common.config.BMTConfig;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.neoforged.api.distmarker.Dist;
@@ -15,7 +16,7 @@ public class GuiEventHandler {
     @SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
         if (BetterMineTeam.IS_CONFLUENCE_LOADED) return;
-
+        if (!BMTConfig.isShowInventoryTeamButtons()) return;
         // 仅在原版生存背包或创造背包初始化完成后，挂载我们的组件
         if (event.getScreen() instanceof InventoryScreen || event.getScreen() instanceof CreativeModeInventoryScreen) {
             // [修复] 现在 TeamRender 有了这个静态方法
