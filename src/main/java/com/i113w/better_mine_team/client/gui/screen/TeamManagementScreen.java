@@ -15,7 +15,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.scores.PlayerTeam;
-import net.neoforged.fml.ModList;
+import net.minecraftforge.fml.ModList;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -27,7 +27,7 @@ public class TeamManagementScreen extends Screen {
     private final java.util.Map<java.util.UUID, TeamMemberEntry> entryCache = new java.util.HashMap<>();
     private String lastKnownTeamName = null;
 
-    private static final ResourceLocation BG_TEXTURE = ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "textures/gui/management_bg.png");
+    private static final ResourceLocation BG_TEXTURE = new ResourceLocation(BetterMineTeam.MODID, "textures/gui/management_bg.png");
 
     // 1. 纹理尺寸 (256x256)
     private static final int TEXTURE_SIZE = 256;
@@ -116,8 +116,8 @@ public class TeamManagementScreen extends Screen {
 
     // 修复 IDE 警告：添加 @NotNull
     @Override
-    public void renderBackground(@NotNull GuiGraphics gfx, int mouseX, int mouseY, float partialTick) {
-        // 保持为空，防止毛玻璃
+    public void renderBackground(@NotNull GuiGraphics gfx) {
+        // 空实现
     }
 
     private void refreshMembers() {

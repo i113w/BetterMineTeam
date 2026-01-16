@@ -23,17 +23,18 @@ import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
-import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.event.entity.EntityJoinLevelEvent;
+import net.minecraftforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
-@EventBusSubscriber(modid = BetterMineTeam.MODID)
+// [关键修改] 实体事件属于 Forge 总线（默认）
+@Mod.EventBusSubscriber(modid = BetterMineTeam.MODID)
 public class MobTeamEventSubscriber {
 
     @SubscribeEvent
     public static void onEntityJoinWorld(EntityJoinLevelEvent event) {
-        if (event.getLevel().isClientSide) return;
+        if (event.getLevel().isClientSide()) return;
 
         if (event.getEntity() instanceof Mob mob) {
             mob.targetSelector.addGoal(1, new TeamHurtByTargetGoal(mob));
@@ -81,7 +82,9 @@ public class MobTeamEventSubscriber {
                 PlayerTeam playerTeam = scoreboard.getPlayersTeam(player.getScoreboardName());
 
                 if (targetTeam == null && playerTeam != null) {
-                    itemstack.consume(1, player);
+                    // [关键修改] 1.20.1 使用 shrink() 代替 consume()
+                    itemstack.shrink(1);
+
                     scoreboard.addPlayerToTeam(livingEntity.getStringUUID(), playerTeam);
 
                     var followAttribute = livingEntity.getAttribute(Attributes.FOLLOW_RANGE);
@@ -128,27 +131,37 @@ public class MobTeamEventSubscriber {
 
         if (BMTConfig.isDragonTamingEnabled()) {
             if (!BMTConfig.isMobTamingEnabled()) return;
-            // [修改] 使用新的配置方法
             Ingredient tamingMaterial = BMTConfig.getTamingMaterial(dragon.getType());
 
             if (!itemstack.isEmpty() && tamingMaterial.test(itemstack)) {
                 if (!TeamPermissions.hasOverridePermission(player)) {
-                    player.displayClientMessage(Component.translatable("better_mine_team.msg.dragon_tame_permission_denied").withStyle(ChatFormatting.RED), true);
+                    player.displayClientMessage(
+                            Component.translatable("better_mine_team.msg.dragon_tame_permission_denied").withStyle(ChatFormatting.RED),
+                            true
+                    );
                     event.setCanceled(true);
                     event.setCancellationResult(InteractionResult.FAIL);
                     return;
                 }
                 if (targetTeam != null) return;
                 if (playerTeam == null) {
-                    player.displayClientMessage(Component.translatable("message.better_mine_team.error.no_team_specified", player.getName()), true);
+                    player.displayClientMessage(
+                            Component.translatable("message.better_mine_team.error.no_team_specified", player.getName()),
+                            true
+                    );
                     return;
                 }
-                itemstack.consume(1, player);
+
+                // [关键修改] 1.20.1 使用 shrink() 代替 consume()
+                itemstack.shrink(1);
+
                 scoreboard.addPlayerToTeam(dragon.getStringUUID(), playerTeam);
                 dragon.setHealth(dragon.getMaxHealth());
 
-                // [修改] 使用本地化键
-                player.displayClientMessage(Component.translatable("better_mine_team.msg.dragon_tame_success").withStyle(ChatFormatting.LIGHT_PURPLE), true);
+                player.displayClientMessage(
+                        Component.translatable("better_mine_team.msg.dragon_tame_success").withStyle(ChatFormatting.LIGHT_PURPLE),
+                        true
+                );
 
                 dragon.setGlowingTag(true);
                 event.setCanceled(true);

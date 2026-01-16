@@ -15,12 +15,13 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.items.IItemHandler;
-import net.neoforged.neoforge.items.ItemStackHandler;
-import net.neoforged.neoforge.items.SlotItemHandler;
-import net.neoforged.neoforge.items.wrapper.InvWrapper;
+import net.minecraftforge.items.IItemHandler;
 import org.jetbrains.annotations.NotNull;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
+import net.minecraftforge.items.SlotItemHandler;
+import net.minecraftforge.items.ItemStackHandler;
+import net.minecraftforge.items.wrapper.InvWrapper;
+
 
 public class EntityDetailsMenu extends AbstractContainerMenu {
 
@@ -126,13 +127,18 @@ public class EntityDetailsMenu extends AbstractContainerMenu {
     }
 
     private IItemHandler getUnifiedInventory(LivingEntity entity) {
-        var cap = entity.getCapability(Capabilities.ItemHandler.ENTITY);
-        if (cap != null) return cap;
-        if (entity instanceof InventoryCarrier carrier) {
-            return new InvWrapper(carrier.getInventory());
-        }
-        return new ItemStackHandler(0);
+        // [1.20.1 修改] 使用 LazyOptional 模式
+        return entity.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.ITEM_HANDLER)
+                .orElseGet(() -> {
+                    // 回退逻辑：检查是否是 InventoryCarrier
+                    if (entity instanceof InventoryCarrier carrier) {
+                        return new InvWrapper(carrier.getInventory());
+                    }
+                    // 最终回退：空 Handler
+                    return new ItemStackHandler(0);
+                });
     }
+
 
     private static LivingEntity getClientEntity(Inventory playerInv, FriendlyByteBuf data) {
         try {

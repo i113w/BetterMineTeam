@@ -3,9 +3,6 @@ package com.i113w.better_mine_team.common.team;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.UUIDUtil;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.entity.LivingEntity;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
@@ -14,15 +11,12 @@ import java.util.Objects;
 import java.util.UUID;
 
 public class Team {
+    // [1.20.1 修改] 移除 STREAM_CODEC，1.20.1 不使用网络序列化
     public static final Codec<Team> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             UUIDUtil.CODEC.fieldOf("uid").forGetter(Team::getUid),
             Codec.INT.fieldOf("color").forGetter(Team::getRGB)
     ).apply(instance, Team::new));
-    public static final StreamCodec<FriendlyByteBuf, Team> STREAM_CODEC = StreamCodec.composite(
-            UUIDUtil.STREAM_CODEC, Team::getUid,
-            ByteBufCodecs.VAR_INT, Team::getRGB,
-            Team::new
-    );
+
     private UUID uid;
     private int rgb;
     private int lastHurtByMobTimestamp;
@@ -64,7 +58,6 @@ public class Team {
 
     @Override
     public final boolean equals(Object o) {
-
         return o == this || (o instanceof Team team && rgb == team.rgb && Objects.equals(uid, team.uid));
     }
 

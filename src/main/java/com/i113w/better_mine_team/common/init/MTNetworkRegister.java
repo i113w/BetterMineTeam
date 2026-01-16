@@ -2,51 +2,70 @@ package com.i113w.better_mine_team.common.init;
 
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.network.*;
-import net.neoforged.bus.api.SubscribeEvent; // 这个注解可以保留，也可以去掉，手动注册时不需要它
-import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
-import net.neoforged.neoforge.network.registration.PayloadRegistrar;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraftforge.network.NetworkRegistry;
+import net.minecraftforge.network.simple.SimpleChannel;
 
-// 移除 @EventBusSubscriber 注解
 public class MTNetworkRegister {
-    public static final String VERSION = "1.0.0";
+    private static final String PROTOCOL_VERSION = "1";
 
-    // 移除 @SubscribeEvent (手动注册时不需要这个注解，虽然留着也没事，但为了干净建议删掉)
-    public static void registerPayload(final RegisterPayloadHandlersEvent event) {
-        final PayloadRegistrar registrar = event.registrar(VERSION);
+    public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
+            new ResourceLocation(BetterMineTeam.MODID, "main"),
+            () -> PROTOCOL_VERSION,
+            PROTOCOL_VERSION::equals,
+            PROTOCOL_VERSION::equals
+    );
 
-        // 1. TeamActionPayload (C -> S)
-        registrar.playToServer(
-                TeamActionPayload.TYPE,
-                TeamActionPayload.STREAM_CODEC,
-                TeamActionPayload::serverHandle
+    private static int packetId = 0;
+
+    public static void register() {
+        BetterMineTeam.LOGGER.info("Registering network packets...");
+
+        // 1. TeamActionPacket (C -> S)
+        CHANNEL.registerMessage(
+                packetId++,
+                TeamActionPacket.class,
+                TeamActionPacket::encode,
+                TeamActionPacket::decode,
+                TeamActionPacket::handle
         );
 
-        // 2. OpenTeamGuiPayload (S -> C)
-        registrar.playToClient(
-                OpenTeamGuiPayload.TYPE,
-                OpenTeamGuiPayload.STREAM_CODEC,
-                OpenTeamGuiPayload::clientHandle
+        // 2. OpenTeamGuiPacket (S -> C)
+        CHANNEL.registerMessage(
+                packetId++,
+                OpenTeamGuiPacket.class,
+                OpenTeamGuiPacket::encode,
+                OpenTeamGuiPacket::decode,
+                OpenTeamGuiPacket::handle
         );
 
-        // 3. TeamManagementPayload (Bidirectional)
-        // [修复] 使用单个 handle 方法作为入口，内部根据 PacketFlow 分流
-        registrar.playBidirectional(
-                TeamManagementPayload.TYPE,
-                TeamManagementPayload.STREAM_CODEC,
-                TeamManagementPayload::handle
+        // 3. TeamManagementPacket (Bidirectional)
+        CHANNEL.registerMessage(
+                packetId++,
+                TeamManagementPacket.class,
+                TeamManagementPacket::encode,
+                TeamManagementPacket::decode,
+                TeamManagementPacket::handle
         );
 
-        registrar.playToServer(
-                DragonControllerPayload.TYPE,
-                DragonControllerPayload.STREAM_CODEC,
-                DragonControllerPayload::serverHandle
+        // 4. DragonControllerPacket (C -> S)
+        CHANNEL.registerMessage(
+                packetId++,
+                DragonControllerPacket.class,
+                DragonControllerPacket::encode,
+                DragonControllerPacket::decode,
+                DragonControllerPacket::handle
         );
 
-        registrar.playToServer(
-                DragonDismountPayload.TYPE,
-                DragonDismountPayload.STREAM_CODEC,
-                DragonDismountPayload::serverHandle
+        // 5. DragonDismountPacket (C -> S)
+        CHANNEL.registerMessage(
+                packetId++,
+                DragonDismountPacket.class,
+                DragonDismountPacket::encode,
+                DragonDismountPacket::decode,
+                DragonDismountPacket::handle
         );
+
+        BetterMineTeam.LOGGER.info("Network packets registered successfully!");
     }
-
 }

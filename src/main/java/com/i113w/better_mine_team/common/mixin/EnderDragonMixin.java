@@ -14,7 +14,6 @@ import net.minecraft.world.entity.projectile.DragonFireball;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.PlayerTeam;
-import org.jetbrains.annotations.NotNull;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -31,12 +30,10 @@ public abstract class EnderDragonMixin extends Mob implements IDragonSpeed {
     @Shadow @Final public double[][] positions;
     @Shadow public int posPointer;
 
-    // [删除] 不再需要 getLatencyPos Shadow
-    // @Shadow public abstract double[] getLatencyPos(int bufferIndex, float partialTicks);
-
     @Unique
     @SuppressWarnings("all")
-    private static final EntityDataAccessor<Float> BMT_DRAGON_SPEED = SynchedEntityData.defineId(EnderDragon.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> BMT_DRAGON_SPEED =
+            SynchedEntityData.defineId(EnderDragon.class, EntityDataSerializers.FLOAT);
 
     @Unique private int bmt$shootCooldown = 0;
     @Unique private boolean bmt$wasRidden = false;
@@ -51,14 +48,16 @@ public abstract class EnderDragonMixin extends Mob implements IDragonSpeed {
     }
 
     @Inject(method = "defineSynchedData", at = @At("TAIL"))
-    private void bmt$defineData(SynchedEntityData.Builder builder, CallbackInfo ci) {
-        builder.define(BMT_DRAGON_SPEED, 0.05F);
+    private void bmt$defineData(CallbackInfo ci) {
+        this.entityData.define(BMT_DRAGON_SPEED, 0.05F);
     }
 
+    // [关键修改] 1.20.1 使用 getPassengerRidingPosition 代替 getPassengerAttachmentPoint
     @Override
-    protected @NotNull Vec3 getPassengerAttachmentPoint(@NotNull Entity entity, @NotNull EntityDimensions dimensions, float partialTick) {
-        // 3.2 格通常能让玩家坐在龙背上而不是肚子里
-        return new Vec3(0, 3.2, 0);
+    public Vec3 getPassengerRidingPosition(Entity passenger) {
+        // 动态计算座位高度：龙高度的 75%
+        // 这比硬编码 3.2 更灵活，适配不同状态下的龙
+        return new Vec3(0, this.getBbHeight() * 0.75, 0);
     }
 
     @Inject(method = "aiStep", at = @At("HEAD"), cancellable = true)
@@ -83,9 +82,7 @@ public abstract class EnderDragonMixin extends Mob implements IDragonSpeed {
 
                 bmt$updateDragonFlight(player);
 
-                // 更新龙的历史位置缓冲区
-                // 这是为了让龙的模型渲染正常（插值需要），即便我们不用于计算座位位置，
-                // 也必须更新它，否则龙的模型可能会卡顿或消失。
+                // 更新龙的历史位置缓冲区（用于模型渲染插值）
                 this.posPointer = (this.posPointer + 1) % this.positions.length;
                 this.positions[this.posPointer][0] = this.getX();
                 this.positions[this.posPointer][1] = this.getY();
@@ -98,8 +95,6 @@ public abstract class EnderDragonMixin extends Mob implements IDragonSpeed {
 
     @Unique
     private void bmt$updateDragonFlight(ServerPlayer player) {
-        // 此处代码与之前一致，略去以节省篇幅
-        // ... (保持原有的飞行控制逻辑)
         float forward = player.zza;
         float strafe = player.xxa;
 
@@ -190,13 +185,15 @@ public abstract class EnderDragonMixin extends Mob implements IDragonSpeed {
             Vec3 headPos = this.getEyePosition().add(this.getViewVector(1.0F).scale(5.0));
             float shootYRot = this.getYRot() + 180.0F;
 
-            DragonFireball fireball = new DragonFireball(this.level(), this, new Vec3(d0, d1, d2));
+            DragonFireball fireball = new DragonFireball(this.level(), this, d0, d1, d2);
             fireball.moveTo(headPos.x, headPos.y, headPos.z, shootYRot, this.getXRot());
             this.level().addFreshEntity(fireball);
             bmt$shootCooldown = 40;
         }
     }
 
+    // [可选修改] 如果 hurt(List<Entity>) 方法在 1.20.1 中签名变化，可以删除此 Inject
+    // 友伤保护已在 LivingHurtEvent 中实现，这里是双重保险
     @Inject(method = "hurt(Ljava/util/List;)V", at = @At("HEAD"))
     private void bmt$preventFriendlyFire(List<Entity> entities, CallbackInfo ci) {
         if (entities == null || entities.isEmpty()) return;

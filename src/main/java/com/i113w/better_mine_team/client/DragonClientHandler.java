@@ -2,50 +2,49 @@ package com.i113w.better_mine_team.client;
 
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.bridge.IDragonSpeed;
-import com.i113w.better_mine_team.common.network.DragonControllerPayload;
-import com.i113w.better_mine_team.common.network.DragonDismountPayload;
+import com.i113w.better_mine_team.common.init.MTNetworkRegister;
+import com.i113w.better_mine_team.common.network.DragonControllerPacket;
+import com.i113w.better_mine_team.common.network.DragonDismountPacket;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.network.chat.Component; // [新增] 导入 Component
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.event.MovementInputUpdateEvent;
-import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
-import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.InputEvent;
+import net.minecraftforge.client.event.MovementInputUpdateEvent;
+import net.minecraftforge.client.event.RenderGuiOverlayEvent;
+import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.network.PacketDistributor;
 
-@EventBusSubscriber(modid = BetterMineTeam.MODID, value = Dist.CLIENT)
+@Mod.EventBusSubscriber(modid = BetterMineTeam.MODID, value = Dist.CLIENT)
 public class DragonClientHandler {
 
     private static boolean lastAccelerate = false;
     private static boolean lastDecelerate = false;
-
-    // [新增] 记录上一帧是否骑着龙，用于检测“刚骑上”的瞬间
     private static boolean wasMounted = false;
 
-    private static final ResourceLocation JUMP_BAR_BACKGROUND_SPRITE = ResourceLocation.withDefaultNamespace("hud/jump_bar_background");
-    private static final ResourceLocation JUMP_BAR_PROGRESS_SPRITE = ResourceLocation.withDefaultNamespace("hud/jump_bar_progress");
+    private static final ResourceLocation JUMP_BAR_BACKGROUND_SPRITE = new ResourceLocation("textures/gui/sprites/hud/jump_bar_background.png");
+    private static final ResourceLocation JUMP_BAR_PROGRESS_SPRITE = new ResourceLocation("textures/gui/sprites/hud/jump_bar_progress.png");
 
     @SubscribeEvent
-    public static void onClientTick(ClientTickEvent.Post event) {
+    public static void onClientTick(TickEvent.ClientTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) return;
+
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer player = mc.player;
         if (player == null) return;
 
         boolean isMounted = player.getVehicle() instanceof EnderDragon;
 
-        // [新增] 覆盖原版下马提示逻辑
+        // 覆盖原版下马提示逻辑
         if (isMounted && !wasMounted) {
-            // 玩家刚刚骑上龙，原版逻辑会发送 "Press Shift to dismount"
-            // 我们立即发送一条新消息覆盖它，使用自定义的按键名称
             Component keyName = ModKeyMappings.DRAGON_DISMOUNT.getTranslatedKeyMessage();
-            // "mount.onboard" 是原版语言键，格式通常为 "Press %s to dismount"
             mc.gui.setOverlayMessage(Component.translatable("mount.onboard", keyName), false);
         }
         wasMounted = isMounted;
@@ -57,11 +56,18 @@ public class DragonClientHandler {
             if (isAccelerate != lastAccelerate || isDecelerate != lastDecelerate) {
                 lastAccelerate = isAccelerate;
                 lastDecelerate = isDecelerate;
-                PacketDistributor.sendToServer(new DragonControllerPayload(isAccelerate, isDecelerate));
+                // Forge 1.20.1 网络发送方式
+                MTNetworkRegister.CHANNEL.send(
+                        net.minecraftforge.network.PacketDistributor.SERVER.noArg(),
+                        new DragonControllerPacket(isAccelerate, isDecelerate)
+                );
             }
 
             while (ModKeyMappings.DRAGON_DISMOUNT.consumeClick()) {
-                PacketDistributor.sendToServer(new DragonDismountPayload());
+                MTNetworkRegister.CHANNEL.send(
+                        net.minecraftforge.network.PacketDistributor.SERVER.noArg(),
+                        new DragonDismountPacket()
+                );
             }
         }
     }
@@ -79,11 +85,13 @@ public class DragonClientHandler {
     }
 
     @SubscribeEvent
-    public static void onRenderGui(RenderGuiLayerEvent.Pre event) {
+    public static void onRenderGuiOverlay(RenderGuiOverlayEvent.Pre event) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
-        if (VanillaGuiLayers.EXPERIENCE_BAR.equals(event.getName()) && mc.player.getVehicle() instanceof EnderDragon dragon) {
+        // Forge 1.20.1 使用 VanillaGuiOverlay 而不是 VanillaGuiLayers
+        if (VanillaGuiOverlay.EXPERIENCE_BAR.id().equals(event.getOverlay().id())
+                && mc.player.getVehicle() instanceof EnderDragon dragon) {
             event.setCanceled(true);
             renderDragonSpeedBar(event.getGuiGraphics(), mc, dragon);
         }
@@ -99,12 +107,13 @@ public class DragonClientHandler {
 
         RenderSystem.enableBlend();
 
-        gfx.blitSprite(JUMP_BAR_BACKGROUND_SPRITE, x, y, 182, 5);
+        // Forge 1.20.1 的 blit 方法
+        gfx.blit(JUMP_BAR_BACKGROUND_SPRITE, x, y, 0, 0, 182, 5, 182, 5);
 
         if (speed > 0) {
             int filledWidth = (int) (speed * 182.0F);
             if (filledWidth > 0) {
-                gfx.blitSprite(JUMP_BAR_PROGRESS_SPRITE, 182, 5, 0, 0, x, y, filledWidth, 5);
+                gfx.blit(JUMP_BAR_PROGRESS_SPRITE, x, y, 0, 0, filledWidth, 5, 182, 5);
             }
         }
 

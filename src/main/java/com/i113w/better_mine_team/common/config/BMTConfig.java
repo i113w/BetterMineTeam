@@ -7,61 +7,61 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.neoforged.neoforge.common.ModConfigSpec;
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import net.minecraftforge.common.ForgeConfigSpec;
+import net.minecraftforge.fml.config.IConfigSpec;
 
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 public class BMTConfig {
-    public static final ModConfigSpec CONFIG;
+    public static final IConfigSpec CONFIG;
 
     // 通用
-    private static final ModConfigSpec.BooleanValue enableTeamFocusFire;
-    private static final ModConfigSpec.IntValue teamHateMemoryDuration;
-    private static final ModConfigSpec.BooleanValue enableDebugLogging;
-    private static final ModConfigSpec.DoubleValue remoteInventoryRange;
-    private static final ModConfigSpec.BooleanValue enableMobTaming;
-    private static final ModConfigSpec.BooleanValue showInventoryTeamButtons;
+    private static final ForgeConfigSpec.BooleanValue enableTeamFocusFire;
+    private static final ForgeConfigSpec.IntValue teamHateMemoryDuration;
+    private static final ForgeConfigSpec.BooleanValue enableDebugLogging;
+    private static final ForgeConfigSpec.DoubleValue remoteInventoryRange;
+    private static final ForgeConfigSpec.BooleanValue enableMobTaming;
+    private static final ForgeConfigSpec.BooleanValue showInventoryTeamButtons;
 
     // AI 参数
-    private static final ModConfigSpec.DoubleValue guardFollowRange;
-    private static final ModConfigSpec.DoubleValue warPropagationRange;
-    private static final ModConfigSpec.DoubleValue tacticalSwitchRange;
-    private static final ModConfigSpec.DoubleValue guardFollowSpeed;
-    private static final ModConfigSpec.DoubleValue guardFollowStartDist;
-    private static final ModConfigSpec.DoubleValue guardFollowStopDist;
+    private static final ForgeConfigSpec.DoubleValue guardFollowRange;
+    private static final ForgeConfigSpec.DoubleValue warPropagationRange;
+    private static final ForgeConfigSpec.DoubleValue tacticalSwitchRange;
+    private static final ForgeConfigSpec.DoubleValue guardFollowSpeed;
+    private static final ForgeConfigSpec.DoubleValue guardFollowStartDist;
+    private static final ForgeConfigSpec.DoubleValue guardFollowStopDist;
 
     // Dragon & Taming
-    private static final ModConfigSpec.BooleanValue enableDragonTaming;
-    private static final ModConfigSpec.BooleanValue enableDragonRiding;
-    private static final ModConfigSpec.DoubleValue dragonBaseSpeed;
-    private static final ModConfigSpec.DoubleValue dragonAcceleration;
-    private static final ModConfigSpec.DoubleValue dragonDeceleration;
-    private static final ModConfigSpec.DoubleValue dragonRotationSpeed;
-    private static final ModConfigSpec.DoubleValue dragonPitchSpeed;
-
-    private static final ModConfigSpec.ConfigValue<String> defaultTamingMaterial;
+    private static final ForgeConfigSpec.BooleanValue enableDragonTaming;
+    private static final ForgeConfigSpec.BooleanValue enableDragonRiding;
+    private static final ForgeConfigSpec.DoubleValue dragonBaseSpeed;
+    private static final ForgeConfigSpec.DoubleValue dragonAcceleration;
+    private static final ForgeConfigSpec.DoubleValue dragonDeceleration;
+    private static final ForgeConfigSpec.DoubleValue dragonRotationSpeed;
+    private static final ForgeConfigSpec.DoubleValue dragonPitchSpeed;
+    private static final ForgeConfigSpec.ConfigValue<String> defaultTamingMaterial;
     // [新增] 专门的龙驯服材料配置
-    private static final ModConfigSpec.ConfigValue<String> dragonTamingMaterial;
+    private static final ForgeConfigSpec.ConfigValue<String> dragonTamingMaterial;
 
-    private static final ModConfigSpec.ConfigValue<List<? extends String>> tamingMaterials;
-    private static final ModConfigSpec.ConfigValue<List<? extends String>> blacklistedEntities;
+    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> tamingMaterials;
+    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> blacklistedEntities;
 
     private static final com.google.common.collect.BiMap<EntityType<?>, Ingredient> tamingMaterialMap = com.google.common.collect.HashBiMap.create();
     private static Ingredient cachedDefaultIngredient = Ingredient.of(Items.GOLDEN_APPLE);
     private static Ingredient cachedDragonIngredient = Ingredient.of(Items.GOLDEN_APPLE); // 缓存龙的材料
     private static final Set<EntityType<?>> blacklistedCache = new HashSet<>();
-    private static final ModConfigSpec.DoubleValue dragonMaxPitch;
+    private static final ForgeConfigSpec.DoubleValue dragonMaxPitch;
 
     // [新增] 寻路失败阈值
-    private static final ModConfigSpec.IntValue followPathFailThreshold;
+    private static final ForgeConfigSpec.IntValue followPathFailThreshold;
 
     static {
-        ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
+        ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
 
         builder.push("general");
         enableTeamFocusFire = builder
@@ -166,9 +166,7 @@ public class BMTConfig {
     }
 
     public static void loadTamingMaterials() {
-        // 加载默认材料
         loadDefaultMaterial();
-        // 加载龙材料
         loadDragonMaterial();
 
         blacklistedCache.clear();
@@ -197,11 +195,8 @@ public class BMTConfig {
                     BuiltInRegistries.ENTITY_TYPE.getOptional(entityId).ifPresentOrElse(entityType -> {
                         try {
                             JsonElement jsonElement = JsonParser.parseString(jsonString);
-                            Ingredient.CODEC_NONEMPTY.parse(JsonOps.INSTANCE, jsonElement)
-                                    .resultOrPartial(err -> BetterMineTeam.LOGGER.error("Failed to parse ingredient JSON for {}: {}", entityId, err))
-                                    .ifPresent(ingredient -> {
-                                        tamingMaterialMap.put(entityType, ingredient);
-                                    });
+                            Ingredient ingredient = Ingredient.fromJson(jsonElement);
+                            tamingMaterialMap.put(entityType, ingredient);
                         } catch (Exception e) {
                             BetterMineTeam.LOGGER.error("JSON syntax error for {}: {}", entityId, e.getMessage());
                         }
@@ -210,7 +205,6 @@ public class BMTConfig {
             }
             catch (Exception ignored) {}
         }
-
     }
 
     private static void loadDefaultMaterial() {
@@ -224,8 +218,9 @@ public class BMTConfig {
     private static Ingredient parseIngredientString(String str, net.minecraft.world.item.Item fallback) {
         try {
             if (str.startsWith("#")) {
-                var result = Ingredient.CODEC_NONEMPTY.parse(JsonOps.INSTANCE, new com.google.gson.JsonPrimitive("{\"tag\": \"" + str.substring(1) + "\"}"));
-                return result.result().orElse(Ingredient.of(fallback));
+                // 标签方式 - 暂不支持，直接返回 fallback
+                BetterMineTeam.LOGGER.warn("Tag-based ingredients not fully supported in this version: {}", str);
+                return Ingredient.of(fallback);
             } else {
                 ResourceLocation rl = ResourceLocation.tryParse(str);
                 if (rl != null) {

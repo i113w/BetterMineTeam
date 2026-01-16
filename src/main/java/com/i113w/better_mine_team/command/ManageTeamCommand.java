@@ -1,7 +1,13 @@
 package com.i113w.better_mine_team.command;
 
 import com.i113w.better_mine_team.BetterMineTeam;
-import com.i113w.better_mine_team.common.network.OpenTeamGuiPayload;
+import com.i113w.better_mine_team.common.init.MTNetworkRegister;
+import com.i113w.better_mine_team.common.network.OpenTeamGuiPacket;
+import net.minecraftforge.event.RegisterCommandsEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.network.PacketDistributor;
+import com.i113w.better_mine_team.common.network.OpenTeamGuiPacket;
 import com.i113w.better_mine_team.common.team.TeamDataStorage;
 import com.i113w.better_mine_team.common.team.TeamPermissions;
 import com.mojang.authlib.GameProfile;
@@ -21,10 +27,6 @@ import net.minecraft.server.players.GameProfileCache;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.RegisterCommandsEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -34,7 +36,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
-@EventBusSubscriber(modid = BetterMineTeam.MODID)
+@Mod.EventBusSubscriber(modid = BetterMineTeam.MODID)
 public class ManageTeamCommand {
 
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -52,7 +54,10 @@ public class ManageTeamCommand {
                         .then(Commands.literal("menu")
                                 .executes(context -> {
                                     ServerPlayer player = context.getSource().getPlayerOrException();
-                                    PacketDistributor.sendToPlayer(player, new OpenTeamGuiPayload());
+                                    com.i113w.better_mine_team.common.init.MTNetworkRegister.CHANNEL.send(
+                                            net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
+                                            new com.i113w.better_mine_team.common.network.OpenTeamGuiPacket()
+                                    );
                                     return 1;
                                 })
                         )

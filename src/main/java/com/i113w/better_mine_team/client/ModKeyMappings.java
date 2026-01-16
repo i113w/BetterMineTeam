@@ -3,10 +3,14 @@ package com.i113w.better_mine_team.client;
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
-import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 import org.lwjgl.glfw.GLFW;
 
-// [修复] 移除已弃用的 @EventBusSubscriber 注解
+// [关键修改] RegisterKeyMappingsEvent 属于 MOD 总线
+@Mod.EventBusSubscriber(modid = BetterMineTeam.MODID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class ModKeyMappings {
 
     public static final KeyMapping DRAGON_ACCELERATE = new KeyMapping(
@@ -30,7 +34,7 @@ public class ModKeyMappings {
             "key.categories.better_mine_team"
     );
 
-    // 该方法现在通过主类手动注册
+    @SubscribeEvent
     public static void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
         event.register(DRAGON_ACCELERATE);
         event.register(DRAGON_DECELERATE);

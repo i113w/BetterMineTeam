@@ -29,7 +29,7 @@ public enum MTGuiIcons {
     SCROLL_TRACK(0, 40, 12, 152),
     SCROLL_THUMB(13, 40, 12, 15);
 
-    private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "textures/gui/icons.png");
+    private static final ResourceLocation TEXTURE = new ResourceLocation(BetterMineTeam.MODID, "textures/gui/icons.png");
 
     public final int u;
     public final int v;

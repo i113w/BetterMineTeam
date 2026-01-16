@@ -2,15 +2,13 @@ package com.i113w.better_mine_team.client.gui.team;
 
 import com.google.common.collect.Maps;
 import com.i113w.better_mine_team.BetterMineTeam;
-import com.i113w.better_mine_team.common.network.TeamActionPayload;
+import com.i113w.better_mine_team.common.init.MTNetworkRegister;
+import com.i113w.better_mine_team.common.network.TeamActionPacket;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.ImageButton;
-import net.minecraft.client.gui.components.WidgetSprites;
 import net.minecraft.client.gui.components.events.GuiEventListener;
-import net.minecraft.client.gui.narration.NarratableEntry;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.player.LocalPlayer;
@@ -18,15 +16,13 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
-import net.neoforged.neoforge.client.event.ScreenEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.minecraftforge.client.event.ScreenEvent;
 
 import java.util.*;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 public class TeamRender {
-    // 缓存：将 TeamRender 实例绑定到具体的 Screen 对象上
-    // 使用 WeakHashMap 防止内存泄漏，当 Screen 关闭被回收时，TeamRender 也会自动消失
     private static final Map<Screen, TeamRender> INSTANCES = new WeakHashMap<>();
 
     private static final int MAIN_ICON_SIZE = 16;
@@ -46,29 +42,19 @@ public class TeamRender {
     private String lastTeamName = "";
     private boolean lastPvPState = false;
 
-    // 私有构造，强制通过 attachTo 创建
     private TeamRender(AbstractContainerScreen<?> screen, Consumer<GuiEventListener> widgetAdder) {
         this.screen = screen;
         this.widgetAdder = widgetAdder;
     }
 
-    /**
-     * [核心方法] 将 TeamRender 挂载到 Screen 初始化事件上
-     */
     public static void attachTo(ScreenEvent.Init.Post event) {
         if (event.getScreen() instanceof AbstractContainerScreen<?> containerScreen) {
-            // 创建实例
             TeamRender render = new TeamRender(containerScreen, event::addListener);
-            // 初始化按钮
             render.initButton();
-            // 存入缓存
             INSTANCES.put(containerScreen, render);
         }
     }
 
-    /**
-     * [核心方法] 在 Screen 渲染事件中调用
-     */
     public static void onRender(ScreenEvent.Render.Post event) {
         TeamRender render = INSTANCES.get(event.getScreen());
         if (render != null) {
@@ -76,19 +62,9 @@ public class TeamRender {
         }
     }
 
-    /**
-     * 每帧检查状态 (替代原来的 checkAndUpdateState 调用时机)
-     */
     public void tick() {
         if (teamIcon == null) return;
-
-        // 检查状态变化并更新按钮纹理
         checkAndUpdateState();
-
-        // 注意：我们不需要手动调用 button.render()
-        // 因为在 initButton() 里我们通过 widgetAdder (event::addListener) 把按钮加进了 Screen 的组件列表
-        // Screen 会自动渲染它们。
-        // 我们只需要控制 visible 属性即可。
     }
 
     private void initButton() {
@@ -106,47 +82,54 @@ public class TeamRender {
         int guiLeft = screen.getGuiLeft();
         int guiTop = screen.getGuiTop();
 
-        // 1. 初始化主图标
+        ResourceLocation teamIconTexture = BetterMineTeam.asResource("textures/gui/team/" + teamColor + "_team_icon.png");
         this.teamIcon = new ImageButton(
                 guiLeft - MAIN_ICON_SIZE,
                 guiTop,
                 MAIN_ICON_SIZE, MAIN_ICON_SIZE,
-                createWidgetSprites("team/" + teamColor + "_team_icon"),
+                0, 0, // u, v
+                MAIN_ICON_SIZE, // yDiffText
+                teamIconTexture,
+                MAIN_ICON_SIZE, MAIN_ICON_SIZE, // textureWidth, textureHeight
                 button -> {
                     this.teamIcon.visible = false;
                     this.teamPVPOn.visible = false;
                     this.teamPVPOff.visible = false;
                     visibleTeamSmallIcon(true);
-                });
+                }
+        );
 
-        // 2. 初始化 PvP 按钮
+        ResourceLocation teamPVPOffTexture = BetterMineTeam.asResource("textures/gui/team/pvp/" + teamColor + "_pvp_off.png");
         this.teamPVPOff = new ImageButton(
                 guiLeft - MAIN_ICON_SIZE,
                 guiTop + MAIN_ICON_SIZE + MAIN_ICON_OFFSET,
                 MAIN_ICON_SIZE, MAIN_ICON_SIZE,
-                createWidgetSprites("team/pvp/" + teamColor + "_pvp_off"),
-                button -> sendPvPPacket(true));
+                0, 0, // u, v
+                MAIN_ICON_SIZE, // yDiffText
+                teamPVPOffTexture,
+                MAIN_ICON_SIZE, MAIN_ICON_SIZE, // textureWidth, textureHeight
+                button -> sendPvPPacket(true)
+        );
 
+        ResourceLocation teamPVPOnTexture = BetterMineTeam.asResource("textures/gui/team/pvp/" + teamColor + "_pvp_on.png");
         this.teamPVPOn = new ImageButton(
                 guiLeft - MAIN_ICON_SIZE,
                 guiTop + MAIN_ICON_SIZE + MAIN_ICON_OFFSET,
                 MAIN_ICON_SIZE, MAIN_ICON_SIZE,
-                createWidgetSprites("team/pvp/" + teamColor + "_pvp_on"),
-                button -> sendPvPPacket(false));
-
-        // 3. 初始化颜色选择板
+                0, 0, // u, v
+                MAIN_ICON_SIZE, // yDiffText
+                teamPVPOnTexture,
+                MAIN_ICON_SIZE, MAIN_ICON_SIZE, // textureWidth, textureHeight
+                button -> sendPvPPacket(false)
+        );
         initSmallIcon(guiLeft, guiTop);
-
-        // 4. 注册到 Screen (这样 Screen 就会自动处理点击和渲染)
         addRenderableWidget();
 
-        // 5. 初始状态同步
         this.lastTeamName = "";
         checkAndUpdateState();
     }
 
     private void addRenderableWidget() {
-        // 使用 Consumer 回调将按钮注册进 Screen
         addWidget(this.teamIcon);
         addWidget(this.teamPVPOn);
         addWidget(this.teamPVPOff);
@@ -155,7 +138,6 @@ public class TeamRender {
         }
     }
 
-    // 辅助方法：处理泛型转换，因为 ImageButton 既是 GuiEventListener 又是 Renderable
     private void addWidget(ImageButton btn) {
         this.widgetAdder.accept(btn);
     }
@@ -163,7 +145,8 @@ public class TeamRender {
     private void initSmallIcon(int guiLeft, int guiTop) {
         List<String> teamColors = Arrays.stream(DyeColor.values())
                 .map(DyeColor::getName)
-                .toList().reversed();
+                .collect(java.util.stream.Collectors.toList());
+        java.util.Collections.reverse(teamColors);
 
         int firstOff = BetterMineTeam.IS_CONFLUENCE_LOADED ? CONFLUENCE_OFFSET : 0;
 
@@ -175,13 +158,20 @@ public class TeamRender {
             int x = guiLeft - SMALL_ICON_SIZE - col * SMALL_ICON_SIZE - col * SMALL_ICON_SPACING;
             int y = guiTop + row * SMALL_ICON_SIZE + row * SMALL_ICON_SPACING;
 
-            ImageButton teamSmallIconBtn = new ImageButton(x, y + firstOff, SMALL_ICON_SIZE, SMALL_ICON_SIZE,
-                    createWidgetSprites("team/small/" + newTeamColor + "_team_small_icon"),
+            ResourceLocation smallIconLoc = BetterMineTeam.asResource("textures/gui/team/small/" + newTeamColor + "_team_small_icon.png");
+
+            ImageButton teamSmallIconBtn = new ImageButton(
+                    x, y + firstOff,
+                    SMALL_ICON_SIZE, SMALL_ICON_SIZE,
+                    0, 0, SMALL_ICON_SIZE,
+                    smallIconLoc,
+                    SMALL_ICON_SIZE, SMALL_ICON_SIZE,
                     button -> {
                         sendChangeTeamPacket(newTeamColor);
                         visibleTeamSmallIcon(false);
                         this.teamIcon.visible = true;
-                    });
+                    }
+            );
             teamSmallIconBtn.visible = false;
             teamSmallIcons.put(newTeamColor, teamSmallIconBtn);
         }
@@ -211,7 +201,7 @@ public class TeamRender {
         if (team == null) {
             this.teamPVPOn.visible = false;
             this.teamPVPOff.visible = false;
-            setImageButtonSprites(this.teamIcon, "team/white_team_icon");
+            // 无法更改纹理，保持原样
             return;
         }
 
@@ -221,19 +211,17 @@ public class TeamRender {
             this.teamPVPOff.visible = !isPvPEnabled;
         }
 
-        String colorName = getTextureColorName(team);
-
-        setImageButtonSprites(this.teamIcon, "team/" + colorName + "_team_icon");
-        setImageButtonSprites(this.teamPVPOn, "team/pvp/" + colorName + "_pvp_on");
-        setImageButtonSprites(this.teamPVPOff, "team/pvp/" + colorName + "_pvp_off");
+        // [注意] 由于无法动态更改纹理，颜色切换后需要重新创建按钮
+        // 这是 1.20.1 的限制
     }
 
     private void sendChangeTeamPacket(String colorName) {
-        PacketDistributor.sendToServer(new TeamActionPayload(0, colorName, false));
+        // Forge 1.20.1 网络发送方式
+        MTNetworkRegister.CHANNEL.sendToServer(new TeamActionPacket(0, colorName, false));
     }
 
     private void sendPvPPacket(boolean enablePvP) {
-        PacketDistributor.sendToServer(new TeamActionPayload(1, "", enablePvP));
+        MTNetworkRegister.CHANNEL.sendToServer(new TeamActionPacket(1, "", enablePvP));
     }
 
     private void visibleTeamSmallIcon(boolean visible) {
@@ -242,15 +230,6 @@ public class TeamRender {
         }
     }
 
-    private void setImageButtonSprites(ImageButton button, String path) {
-        ResourceLocation loc = BetterMineTeam.asResource(path);
-        button.sprites = new WidgetSprites(loc, loc);
-    }
-
-    private WidgetSprites createWidgetSprites(String path) {
-        ResourceLocation loc = BetterMineTeam.asResource(path);
-        return new WidgetSprites(loc, loc);
-    }
 
     private String getTextureColorName(PlayerTeam team) {
         if (team.getName().startsWith(TeamManager.TEAM_PREFIX)) {

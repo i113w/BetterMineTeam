@@ -3,14 +3,14 @@ package com.i113w.better_mine_team.common.event.subscriber;
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import net.minecraft.server.MinecraftServer;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.server.ServerStartedEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
-import net.neoforged.neoforge.event.server.ServerStoppingEvent;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.server.ServerStartedEvent;
+import net.minecraftforge.event.server.ServerStoppingEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
-
-@EventBusSubscriber(modid = BetterMineTeam.MODID)
+// [关键修改] 服务器事件属于 Forge 总线（默认）
+@Mod.EventBusSubscriber(modid = BetterMineTeam.MODID)
 public class ServerEventSubscriber {
 
     @SubscribeEvent
@@ -21,17 +21,23 @@ public class ServerEventSubscriber {
         }
     }
 
+    // [关键修改] 1.20.1 使用 TickEvent.ServerTickEvent 代替 ServerTickEvent.Post
     @SubscribeEvent
-    public static void onServerTick(ServerTickEvent.Post event) {
+    public static void onServerTick(TickEvent.ServerTickEvent event) {
+        // 只在 END 阶段执行，避免重复
+        if (event.phase != TickEvent.Phase.END) return;
+
+        MinecraftServer server = event.getServer();
+
         // 每 5 秒 (100 ticks) 清理一次过期仇恨数据
-        if (event.getServer().getTickCount() % 100 == 0) {
-            // [修改] 传入 server 实例以获取准确时间
-            TeamManager.cleanupExpiredHateData(event.getServer());
+        if (server.getTickCount() % 100 == 0) {
+            TeamManager.cleanupExpiredHateData(server);
         }
     }
+
     @SubscribeEvent
     public static void onServerStopping(ServerStoppingEvent event) {
-        // 清空静态缓存
-        TeamManager.clearAllData(); // 需要在 TeamManager 里加这个方法
+        // 清空静态缓存，防止内存泄漏
+        TeamManager.clearAllData();
     }
 }

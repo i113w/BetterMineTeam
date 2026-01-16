@@ -3,7 +3,7 @@ package com.i113w.better_mine_team.client.gui.screen;
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.client.gui.asset.MTGuiIcons;
 import com.i113w.better_mine_team.common.menu.EntityDetailsMenu;
-import com.i113w.better_mine_team.common.network.TeamManagementPayload;
+import com.i113w.better_mine_team.common.network.TeamManagementPacket;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -16,7 +16,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
-import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.NotNull;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -24,7 +23,7 @@ import org.lwjgl.glfw.GLFW;
 
 public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMenu> {
 
-    private static final ResourceLocation BG_TEXTURE = ResourceLocation.fromNamespaceAndPath(
+    private static final ResourceLocation BG_TEXTURE = new ResourceLocation(
             BetterMineTeam.MODID, "textures/gui/entity_details.png"
     );
 
@@ -69,7 +68,7 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
 
         // 使用辅助方法添加按钮，它会自动将 String key 转换为 Component
         addIconButton(btnX, btnY, MTGuiIcons.ICON_TELEPORT, (btn) -> {
-            sendAction(TeamManagementPayload.ACTION_TELEPORT, "");
+            sendAction(TeamManagementPacket.ACTION_TELEPORT, "");
         }, "better_mine_team.gui.tooltip.teleport");
 
         addIconButton(btnX + spacing, btnY, MTGuiIcons.ICON_RENAME, (btn) -> {
@@ -82,7 +81,7 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
                 btnY + spacing,
                 MTGuiIcons.ICON_FOLLOW_OFF,
                 (btn) -> {
-                    sendAction(TeamManagementPayload.ACTION_TOGGLE_FOLLOW, "");
+                    sendAction(TeamManagementPacket.ACTION_TOGGLE_FOLLOW, "");
                     // 移除旧的预测逻辑，等待服务器同步
                 },
                 Component.translatable("better_mine_team.gui.tooltip.follow") // 修复处：String -> Component
@@ -120,18 +119,20 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
     private void confirmRename() {
         String newName = this.nameField.getValue();
         if (!newName.isEmpty()) {
-            sendAction(TeamManagementPayload.ACTION_RENAME, newName);
+            sendAction(TeamManagementPacket.ACTION_RENAME, newName);
         }
         this.isRenaming = false;
         this.nameField.setVisible(false);
     }
 
     private void sendAction(int action, String data) {
-        PacketDistributor.sendToServer(new TeamManagementPayload(
-                action,
-                this.menu.getTargetEntity().getId(),
-                data
-        ));
+        com.i113w.better_mine_team.common.init.MTNetworkRegister.CHANNEL.sendToServer(
+                new com.i113w.better_mine_team.common.network.TeamManagementPacket(
+                        action,
+                        this.menu.getTargetEntity().getId(),
+                        data
+                )
+        );
     }
 
     // 辅助方法：将 String key 自动转为 Component 传入 IconButton
@@ -233,8 +234,7 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         entity.yHeadRot = entity.getYRot();
         entity.yRotO = entity.getYRot();
         entity.xRotO = entity.getXRot();
-        InventoryScreen.renderEntityInInventory(gfx, (float)x, (float)y, (float)scale, new Vector3f(0,0,0), quaternionf, quaternionf1, entity);
-        entity.yBodyRot = yBodyRot;
+        InventoryScreen.renderEntityInInventory(gfx, x, y, scale, quaternionf, quaternionf1, entity);        entity.yBodyRot = yBodyRot;
         entity.setYRot(yHeadRot);
         entity.setXRot(xRot);
         entity.yHeadRot = yHeadRot;
