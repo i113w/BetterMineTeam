@@ -89,8 +89,8 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         this.addRenderableWidget(this.followButton);
         updateFollowButtonState();
 
-        addIconButton(btnX + spacing, btnY + spacing, MTGuiIcons.ICON_RTS, (btn) -> {
-        }, "better_mine_team.gui.tooltip.rts");
+        // addIconButton(btnX + spacing, btnY + spacing, MTGuiIcons.ICON_RTS, (btn) -> {
+        // }, "better_mine_team.gui.tooltip.rts");
     }
 
     @Override

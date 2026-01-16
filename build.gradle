@@ -20,7 +20,7 @@ minecraft {
     mappings channel: 'parchment', version: "${parchment_mappings_version}-${parchment_minecraft_version}"
 
     // accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
-    copyIdeResources = true
+
     runs {
         client {
             workingDirectory project.file('run')
@@ -123,7 +123,9 @@ dependencies {
     //compileOnly "curse.maven:ftb-library-forge-404465:4975116" // 示例版本
 
     // Mixin 注解处理器
+    implementation 'org.spongepowered:mixin:0.8.5'
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+
 }
 
 // Process resources
@@ -174,6 +176,13 @@ idea {
 // Mixin configuration
 mixin {
     add sourceSets.main, "${mod_id}.refmap.json"
-
     config "${mod_id}.mixins.json"
+}
+
+compileJava {
+    options.encoding = 'UTF-8'
+    options.compilerArgs += [
+            "-AreobfSrgFile=${tasks.createMcpToSrg.output.get().asFile}",
+            "-AoutRefMapFile=${buildDir}/resources/main/${mod_id}.refmap.json"
+    ]
 }

@@ -29,9 +29,8 @@ public class DragonClientHandler {
     private static boolean lastDecelerate = false;
     private static boolean wasMounted = false;
 
-    private static final ResourceLocation JUMP_BAR_BACKGROUND_SPRITE = new ResourceLocation("textures/gui/sprites/hud/jump_bar_background.png");
-    private static final ResourceLocation JUMP_BAR_PROGRESS_SPRITE = new ResourceLocation("textures/gui/sprites/hud/jump_bar_progress.png");
-
+    private static final ResourceLocation JUMP_BAR_BACKGROUND = new ResourceLocation(BetterMineTeam.MODID, "textures/gui/hud/jump_bar_background.png");
+    private static final ResourceLocation JUMP_BAR_PROGRESS = new ResourceLocation(BetterMineTeam.MODID, "textures/gui/hud/jump_bar_progress.png");
     @SubscribeEvent
     public static void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
@@ -108,12 +107,12 @@ public class DragonClientHandler {
         RenderSystem.enableBlend();
 
         // Forge 1.20.1 的 blit 方法
-        gfx.blit(JUMP_BAR_BACKGROUND_SPRITE, x, y, 0, 0, 182, 5, 182, 5);
+        gfx.blit(JUMP_BAR_BACKGROUND, x, y, 0, 0, 182, 5, 182, 5);
 
         if (speed > 0) {
             int filledWidth = (int) (speed * 182.0F);
             if (filledWidth > 0) {
-                gfx.blit(JUMP_BAR_PROGRESS_SPRITE, x, y, 0, 0, filledWidth, 5, 182, 5);
+                gfx.blit(JUMP_BAR_PROGRESS, x, y, 0, 0, filledWidth, 5, 182, 5);
             }
         }
 

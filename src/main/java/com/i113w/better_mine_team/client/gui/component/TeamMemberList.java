@@ -12,82 +12,62 @@ import org.jetbrains.annotations.NotNull;
 
 public class TeamMemberList extends ObjectSelectionList<TeamMemberEntry> {
 
-    private static final ResourceLocation ICONS = new ResourceLocation(BetterMineTeam.MODID, "textures/gui/icons.png");
-
-    private final int listWidth = 150;
-    private final int listHeight = 152;
-
+    // 1.20.1 中，width 是列表组件的宽度，itemHeight 是条目高度
     public TeamMemberList(Minecraft mc, int guiLeft, int guiTop) {
         super(
                 mc,
-                150,
-                152,
-                guiTop + 7,
-                guiTop + 7 + 152,
-                TeamMemberEntry.ITEM_HEIGHT
+                150, // width
+                152, // height
+                guiTop + 7, // top (Y coordinate)
+                guiTop + 7 + 152, // bottom (Y coordinate)
+                TeamMemberEntry.ITEM_HEIGHT // itemHeight
         );
+        // [关键] 设置列表的左侧起始位置
+        this.setLeftPos(guiLeft + 7);
+        // 设置 RenderBackground 为 false，因为我们在 Screen 里画了背景图
+        this.setRenderBackground(false);
+        this.setRenderTopAndBottom(false); // 不画默认的黑色背景
     }
 
     @Override
     public int getRowWidth() {
-        return this.listWidth;
+        return 150;
     }
 
     @Override
     protected int getScrollbarPosition() {
-        return this.getRowRight() + 6;
+        return this.getLeft() + this.width - 6;
     }
 
+    // 重写 render，移除 scissor 逻辑，因为 ObjectSelectionList 内部会自动处理 scissor
+    // 如果列表显示不全，说明 super.render 里的逻辑有问题，或者 setLeftPos 没生效
     @Override
     public void render(@NotNull GuiGraphics gfx, int mouseX, int mouseY, float partialTick) {
-        int left = this.getRowLeft();
-        int right = this.getRowRight();
-        int top = this.getTop();
-        int bottom = this.getBottom();
+        // 调用父类渲染，父类会调用 renderList，renderList 会调用 Entry.render
+        super.render(gfx, mouseX, mouseY, partialTick);
 
-        gfx.enableScissor(left, top, right, bottom);
-
-        for (int i = 0; i < this.getItemCount(); ++i) {
-            int itemTop = top + i * TeamMemberEntry.ITEM_HEIGHT - (int) this.getScrollAmount();
-            int itemBottom = itemTop + TeamMemberEntry.ITEM_HEIGHT;
-
-            if (itemBottom >= top && itemTop <= bottom) {
-                TeamMemberEntry entry = this.getEntry(i);
-                boolean hovered = entry.equals(this.getHovered());
-
-                entry.render(
-                        gfx,
-                        i,
-                        itemTop,
-                        left,
-                        this.getRowWidth(),
-                        TeamMemberEntry.ITEM_HEIGHT,
-                        mouseX,
-                        mouseY,
-                        hovered,
-                        partialTick
-                );
-            }
-        }
-
-        gfx.disableScissor();
+        // 渲染自定义滚动条
         renderCustomScrollbar(gfx);
     }
-
 
     private void renderCustomScrollbar(GuiGraphics gfx) {
         int maxScroll = this.getMaxScroll();
         if (maxScroll <= 0) return;
 
-        int scrollbarX = this.getRowRight() + 6;
+        // 重新计算滚动条位置，基于列表的绝对位置
+        int scrollbarX = this.getLeft() + this.width + 1; // 微调位置
         int scrollbarY = this.getTop();
-        int scrollbarHeight = this.getBottom() - this.getTop();
+        int scrollbarHeight = this.getHeight();
 
         RenderSystem.enableBlend();
 
         MTGuiIcons.SCROLL_TRACK.render(gfx, scrollbarX, scrollbarY);
 
         int totalContentHeight = this.getItemCount() * TeamMemberEntry.ITEM_HEIGHT;
+
+        // 防止除以零
+        if (totalContentHeight == 0) totalContentHeight = 1;
+
         int thumbHeight = (int) ((float) (scrollbarHeight * scrollbarHeight) / totalContentHeight);
         thumbHeight = Mth.clamp(thumbHeight, 15, scrollbarHeight);
 
@@ -99,8 +79,6 @@ public class TeamMemberList extends ObjectSelectionList<TeamMemberEntry> {
         RenderSystem.disableBlend();
     }
 
-
-
     public void clearMembers() {
         this.clearEntries();
     }
@@ -109,19 +87,15 @@ public class TeamMemberList extends ObjectSelectionList<TeamMemberEntry> {
         this.addEntry(entry);
     }
 
-    //暴露 removeEntry (如果父类是 protected)
     public boolean removeEntry(TeamMemberEntry entry) {
         return super.removeEntry(entry);
     }
 
-    //暴露 children 列表供排序使用
     public java.util.List<TeamMemberEntry> getEntries() {
         return super.children();
     }
 
-
     public int getListRight() {
-        return this.getRowLeft() + this.listWidth;
+        return this.getLeft() + this.width;
     }
-
 }

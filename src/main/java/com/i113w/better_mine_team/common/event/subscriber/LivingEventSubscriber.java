@@ -10,24 +10,20 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.monster.Slime;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.living.LivingAttackEvent; // [新增导入]
 import net.minecraftforge.event.entity.living.LivingChangeTargetEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
-// [关键修改] 所有实体事件属于 Forge 总线（默认），无需指定 bus 参数
 @Mod.EventBusSubscriber(modid = BetterMineTeam.MODID)
 public class LivingEventSubscriber {
 
-    // [关键修改] 1.20.1 使用 TickEvent.PlayerTickEvent，没有泛型 EntityTickEvent
     @SubscribeEvent
     public static void onEntityTick(TickEvent.PlayerTickEvent event) {
-        // Slime 特殊处理移到下方的专用方法
     }
 
-    // [新增] Slime 碰撞伤害的替代实现
-    // 由于 1.20.1 没有 EntityTickEvent.Pre，我们使用 LivingEvent.LivingTickEvent
     @SubscribeEvent
     public static void onLivingTick(net.minecraftforge.event.entity.living.LivingEvent.LivingTickEvent event) {
         if (event.getEntity().level().isClientSide) return;
@@ -67,18 +63,24 @@ public class LivingEventSubscriber {
         }
     }
 
-    // [关键修改] 1.21.1 的 LivingIncomingDamageEvent 在 1.20.1 中是 LivingHurtEvent
+    /**
+     * [修复] 使用 LivingAttackEvent 拦截 PVP/友伤。
+     * 这比 LivingHurtEvent 更早触发，可以阻止击退和受伤动画，确保开关生效。
+     */
     @SubscribeEvent
-    public static void onLivingPvP(LivingHurtEvent event) {
+    public static void onLivingAttack(LivingAttackEvent event) {
         LivingEntity hurtEntity = event.getEntity();
         DamageSource source = event.getSource();
         Entity attackEntity = source.getEntity();
 
+        // 必须是服务端，且攻击者是生物，且不是自残
         if (hurtEntity.level() instanceof ServerLevel && attackEntity instanceof LivingEntity livingAttacker && attackEntity != hurtEntity) {
             PlayerTeam hurtTeam = TeamManager.getTeam(hurtEntity);
             PlayerTeam attackTeam = TeamManager.getTeam(livingAttacker);
 
+            // 如果双方都有队伍，且是盟友（包括同一队）
             if (hurtTeam != null && attackTeam != null && hurtTeam.isAlliedTo(attackTeam)) {
+                // 检查受害者的队伍是否允许友伤
                 if (!hurtTeam.isAllowFriendlyFire()) {
                     event.setCanceled(true);
                 }
@@ -86,6 +88,10 @@ public class LivingEventSubscriber {
         }
     }
 
+    /**
+     * 保留 LivingHurtEvent 用于处理伤害后的逻辑（如仇恨连锁），
+     * 但不再处理 PVP 拦截（已移至 LivingAttackEvent）。
+     */
     @SubscribeEvent
     public static void onSetTeamLastHurtMob(LivingHurtEvent event) {
         LivingEntity hurtEntity = event.getEntity();
@@ -99,6 +105,14 @@ public class LivingEventSubscriber {
         PlayerTeam hurtTeam = TeamManager.getTeam(hurtEntity);
         PlayerTeam attackTeam = TeamManager.getTeam(livingAttacker);
 
+        // 双重保险：如果 AttackEvent 没拦住，这里再拦一次
+        if (hurtTeam != null && attackTeam != null && hurtTeam.isAlliedTo(attackTeam)) {
+            if (!hurtTeam.isAllowFriendlyFire()) {
+                event.setCanceled(true);
+                return;
+            }
+        }
+
         if (hurtTeam != null || attackTeam != null) {
             BetterMineTeam.debug("Damage Event: Attacker={} (Team={}), Victim={} (Team={})",
                     livingAttacker.getName().getString(),
@@ -108,7 +122,7 @@ public class LivingEventSubscriber {
             );
         }
 
-        // 场景1: 团战 (双方都有队伍)
+        // 场景1: 团战
         if (hurtTeam != null && attackTeam != null) {
             if (hurtTeam.isAlliedTo(attackTeam)) return;
             TeamManager.scanAndAddThreats(hurtTeam, attackTeam, livingAttacker);
@@ -116,9 +130,8 @@ public class LivingEventSubscriber {
             if (BMTConfig.isTeamFocusFireEnabled()) {
                 TeamManager.scanAndAddThreats(attackTeam, hurtTeam, hurtEntity);
             }
-            BetterMineTeam.debug("Set Team Threat for Team {}: {}", hurtTeam.getName(), livingAttacker.getName().getString());
         }
-        // 场景2: 打野/被野怪打
+        // 场景2: 打野
         else {
             if (hurtTeam != null) {
                 TeamManager.addThreat(hurtTeam, livingAttacker);
