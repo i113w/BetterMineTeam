@@ -33,11 +33,17 @@ public class ModKeyMappings {
             GLFW.GLFW_KEY_R,
             "key.categories.better_mine_team"
     );
-
+    public static final KeyMapping OPEN_TEAM_MENU = new KeyMapping(
+            "key.better_mine_team.open_menu",
+            InputConstants.Type.KEYSYM,
+            GLFW.GLFW_KEY_K,
+            "key.categories.better_mine_team"
+    );
     @SubscribeEvent
     public static void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
         event.register(DRAGON_ACCELERATE);
         event.register(DRAGON_DECELERATE);
         event.register(DRAGON_DISMOUNT);
+        event.register(OPEN_TEAM_MENU);
     }
 }

@@ -32,6 +32,7 @@
 "key.better_mine_team.dragon_accelerate": "Dragon Accelerate",
 "key.better_mine_team.dragon_decelerate": "Dragon Decelerate",
 "key.better_mine_team.dragon_dismount": "Dragon Dismount",
+"key.better_mine_team.open_menu": "Open Team Menu",
 "better_mine_team.msg.dragon_tame_permission_denied": "Insufficient Permission: You must have [The Lord of the Teams] permission to tame the Ender Dragon!",
 "better_mine_team.msg.dragon_tame_success": "§5Ender Dragon Tamed Successfully!",
 "better_mine_team.gui.label.name": "Name",

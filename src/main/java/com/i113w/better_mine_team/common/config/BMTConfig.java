@@ -137,7 +137,7 @@ public class BMTConfig {
                 .define("enableMobTaming", true);
         defaultTamingMaterial = builder
                 .comment("Default item/tag used to tame mobs if not specified in the list below.")
-                .comment("Example: 'minecraft:golden_apple' or '#minecraft:flowers'")
+                .comment("Example: 'minecraft:wheat'")
                 .define("defaultTamingMaterial", "minecraft:golden_apple");
 
         dragonTamingMaterial = builder
@@ -151,8 +151,7 @@ public class BMTConfig {
         tamingMaterials = builder
                 .comment("List of specific materials for specific entities.")
                 .comment("Format: 'entity_id-ingredient_json'")
-                .comment("Example 1: ['minecraft:cow-{\"item\": \"minecraft:wheat\"}']")
-                .comment("Example 2: ['minecraft:sheep-{\"tag\": \"minecraft:wool\"}']")
+                .comment("Example : ['minecraft:cow-{\"item\": \"minecraft:wheat\"}']")
                 .define("tamingMaterials", List.of(), value -> {
                     if (value instanceof List<?> list) {
                         return list.stream().allMatch(o -> o instanceof String str && str.contains("-{"));

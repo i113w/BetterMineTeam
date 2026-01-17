@@ -32,6 +32,7 @@
 "key.better_mine_team.dragon_accelerate": "末影龙加速",
 "key.better_mine_team.dragon_decelerate": "末影龙减速",
 "key.better_mine_team.dragon_dismount": "离开末影龙",
+"key.better_mine_team.open_menu": "打开队伍菜单",
 "better_mine_team.msg.dragon_tame_permission_denied": "权限不足: 只有获得 [The Lord of the Teams] 权限才能驯服末影龙!",
 "better_mine_team.msg.dragon_tame_success": "§5末影龙驯服成功!",
 "better_mine_team.gui.label.name": "名称",

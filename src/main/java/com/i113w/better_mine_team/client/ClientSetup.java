@@ -1,10 +1,13 @@
 package com.i113w.better_mine_team.client;
 
 import com.i113w.better_mine_team.client.gui.screen.EntityDetailsScreen;
+import com.i113w.better_mine_team.client.gui.screen.TeamManagementScreen;
 import com.i113w.better_mine_team.client.manager.ClientSelectionManager;
 import com.i113w.better_mine_team.common.registry.ModMenuTypes;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -30,5 +33,15 @@ class ClientForgeEvents {
     @SubscribeEvent
     public static void onClientLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         ClientSelectionManager.clear();
+    }
+
+    @SubscribeEvent
+    public static void onKeyInput(InputEvent.Key event) {
+        while (ModKeyMappings.OPEN_TEAM_MENU.consumeClick()) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player != null && mc.level != null && mc.screen == null) {
+                mc.setScreen(new TeamManagementScreen());
+            }
+        }
     }
 }
