@@ -183,6 +183,24 @@ compileJava {
     options.encoding = 'UTF-8'
     options.compilerArgs += [
             "-AreobfSrgFile=${tasks.createMcpToSrg.output.get().asFile}",
-            "-AoutRefMapFile=${buildDir}/resources/main/${mod_id}.refmap.json"
+            "-AoutRefMapFile=${buildDir}/tmp/compileJava/${mod_id}.refmap.json"
     ]
+
+
+    doLast {
+        def refmapSrc = file("${buildDir}/tmp/compileJava/${mod_id}.refmap.json")
+        def refmapDest = file("${buildDir}/resources/main/${mod_id}.refmap.json")
+
+        if (refmapSrc.exists()) {
+            refmapDest.parentFile.mkdirs()
+            refmapSrc.copyTo(refmapDest.path, true)
+            logger.lifecycle("Refmap copied to resources: ${refmapDest}")
+        } else {
+            logger.warn("Refmap not found at: ${refmapSrc}")
+        }
+    }
+}
+
+processResources {
+    dependsOn compileJava
 }
