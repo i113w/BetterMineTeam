@@ -9,9 +9,10 @@
 
 ---
 
-![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square&logo=minecraft)
-![NeoForge Version](https://img.shields.io/badge/NeoForge-21.1.209-orange?style=flat-square&logo=neoforge)
-![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
+![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1%20%7C%201.20.1-green?style=flat-square&logo=minecraft)
+![NeoForge Version](https://img.shields.io/badge/NeoForge-1.21.1-orange?style=flat-square&logo=neoforge)
+![Forge Version](https://img.shields.io/badge/Forge-1.20.1-b45f06?style=flat-square&logo=curseforge)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](https://github.com/i113w/BetterMineTeam/blob/main/LICENSE)
 
 > **Notice**
 >
@@ -58,8 +59,8 @@
 
 ## Installation
 
-1.  Prepare **Minecraft 1.21.1** and the **NeoForge** loader.
-2.  Ensure the NeoForge version is **21.1.209** or higher.
+1.  Prepare **Minecraft 1.21.1** with **NeoForge**, or **Minecraft 1.20.1** with **Forge**.
+2.  Ensure the NeoForge version is **21.1.209** or higher (For Forge, the **latest Recommended Version** is suggested).
 3.  Download the `.jar` file from the [Releases](https://github.com/i113w/BetterMineTeam/releases) page.
 4.  Place the file into the `.minecraft/mods` folder.
 

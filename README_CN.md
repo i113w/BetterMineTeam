@@ -9,9 +9,10 @@
 
 ---
 
-![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green?style=flat-square&logo=minecraft)
-![NeoForge Version](https://img.shields.io/badge/NeoForge-21.1.209-orange?style=flat-square&logo=neoforge)
-![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
+![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1%20%7C%201.20.1-green?style=flat-square&logo=minecraft)
+![NeoForge Version](https://img.shields.io/badge/NeoForge-1.21.1-orange?style=flat-square&logo=neoforge)
+![Forge Version](https://img.shields.io/badge/Forge-1.20.1-b45f06?style=flat-square&logo=curseforge)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](https://github.com/i113w/BetterMineTeam/blob/main/LICENSE)
 
 > **须知**
 >
@@ -58,8 +59,8 @@
 
 ## 安装
 
-1.  准备 **Minecraft 1.21.1** 和加载器 **NeoForge**。
-2.  请确保 NeoForge 版本在 **21.1.209** 及以上。
+1.  准备 **Minecraft 1.21.1** 和加载器 **NeoForge**或**Minecraft 1.20.1**和加载器**Forge**。
+2.  请确保 NeoForge 版本在 **21.1.209** 及以上（Forge 最好选用**最新的Recommended Version**）。
 3.  从 [Releases](https://github.com/i113w/BetterMineTeam/releases) 页面下载 `.jar` 文件。
 4.  将文件放入 `.minecraft/mods` 文件夹。
 
