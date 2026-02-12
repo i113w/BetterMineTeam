@@ -4,9 +4,12 @@ import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.registry.ModAttachments;
 import com.i113w.better_mine_team.common.network.data.CommandType;
 import com.i113w.better_mine_team.common.rts.data.RTSUnitData;
+import com.i113w.better_mine_team.common.team.TeamManager;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.scores.PlayerTeam;
 
 import java.util.EnumSet;
 
@@ -18,6 +21,8 @@ public class RTSMoveGoal extends Goal {
 
     // 缓存目标点
     private double targetX, targetY, targetZ;
+
+    private boolean arrivedSuccessfully = false;
 
     public RTSMoveGoal(PathfinderMob mob, double speedModifier) {
         this.mob = mob;
@@ -58,6 +63,7 @@ public class RTSMoveGoal extends Goal {
         this.targetY = target.y;
         this.targetZ = target.z;
         this.forcePathTimer = 0;
+        this.arrivedSuccessfully = false;
 
         // ✅ Goal 统一控制 Navigation（不在 Controller 里调用）
         boolean success = mob.getNavigation().moveTo(this.targetX, this.targetY, this.targetZ, this.speedModifier);
@@ -80,14 +86,39 @@ public class RTSMoveGoal extends Goal {
                 mob.getNavigation().moveTo(targetX, targetY, targetZ, speedModifier);
             }
         }
+
+        // 检查是否到达
+        if (mob.distanceToSqr(targetX, targetY, targetZ) <= getCompletionDistSqr()) {
+            this.arrivedSuccessfully = true;
+            // 这一步会让 canContinueToUse 返回 false，从而触发 stop()
+        }
     }
 
     @Override
     public void stop() {
         mob.getNavigation().stop();
 
-        // 检查是否是因为到达目的地而停止
-        if (mob.distanceToSqr(targetX, targetY, targetZ) <= getCompletionDistSqr()) {
+        // [核心修复] 智能衔接：移动结束后，如果有敌人，立即切换到 ATTACK 模式
+        if (this.arrivedSuccessfully || mob.distanceToSqr(targetX, targetY, targetZ) <= getCompletionDistSqr()) {
+
+            PlayerTeam myTeam = TeamManager.getTeam(mob);
+            // 1. 尝试在 TeamManager 仇恨列表中寻找最近的敌人
+            LivingEntity potentialTarget = TeamManager.getBestThreat(myTeam, mob);
+
+            if (potentialTarget != null) {
+                BetterMineTeam.debug("[RTS-MOVE-GOAL] Arrived. Found threat {}, switching to ATTACK.",
+                        potentialTarget.getName().getString());
+
+                // 自动切换为攻击指令 (实现 Attack Move)
+                data.setAttackCommand(potentialTarget.getId());
+                mob.setTarget(potentialTarget);
+            } else {
+                // 没有敌人，才进入发呆(STOP)状态
+                data.stop();
+            }
+        } else {
+            // 如果是被打断（比如被攻击击退导致 Goal 终止），也暂定为 STOP，
+            // 这样 TeamHurtByTargetGoal 有机会接管
             data.stop();
         }
     }

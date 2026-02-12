@@ -156,7 +156,7 @@ public class ServerPacketHandler {
             // 执行指令
             switch (payload.commandType()) {
                 case MOVE -> executeMoveCommand(validUnits, payload.target().pos());
-                case ATTACK -> executeAttackCommand(validUnits, level, payload.target().targetEntityId());
+                case ATTACK -> executeAttackCommand(validUnits, level, payload.target().targetEntityId(), payload.secondaryTargetIds());
                 case STOP -> executeStopCommand(validUnits);
             }
 
@@ -292,23 +292,7 @@ public class ServerPacketHandler {
         }
     }
 
-    private static void executeAttackCommand(List<Mob> units, Level level, int targetId) {
-        Entity target = level.getEntity(targetId);
 
-        BetterMineTeam.debug("[RTS-ATTACK-CMD] Executing for {} units, targetId={}, found={}",
-                units.size(),
-                targetId,
-                target != null);
-
-        if (target == null) return;
-
-        for (Mob unit : units) {
-            if (unit == target) continue;
-            if (TeamManager.isAlly(unit, target instanceof net.minecraft.world.entity.LivingEntity l ? l : null)) continue;
-
-            RTSUnitAIController.setAttackTarget(unit, target);
-        }
-    }
 
     private static void executeStopCommand(List<Mob> units) {
         BetterMineTeam.debug("[RTS-STOP-CMD] Executing for {} units", units.size());

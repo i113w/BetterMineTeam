@@ -48,6 +48,10 @@ public class RTSCameraManager {
         this.targetPos = playerPos.add(0, zoomLevel, 0);
         this.targetYaw = mc.player.getYRot();
         this.targetPitch = DEFAULT_PITCH;
+        int minHeight = mc.level.getMinBuildHeight();
+        if (this.targetPos.y < minHeight + 5) {
+            this.targetPos = new Vec3(this.targetPos.x, minHeight + 10, this.targetPos.z);
+        }
 
         // 3. 创建摄像机实体 (仅客户端世界)
         this.cameraEntity = new RTSCameraEntity(ModEntities.RTS_CAMERA.get(), mc.level);
@@ -144,9 +148,8 @@ public class RTSCameraManager {
         this.targetPos = newTarget;
         this.targetYaw += rotateYaw * 5.0f;
         this.targetPos = this.targetPos.add(0, zoomDelta * -2.0, 0);
-
-        // 限制高度范围
-        double clampedY = Mth.clamp(this.targetPos.y, 60, 320);
+        int minHeight = Minecraft.getInstance().level.getMinBuildHeight();
+        double clampedY = Mth.clamp(this.targetPos.y, minHeight + 5, 320);
         this.targetPos = new Vec3(this.targetPos.x, clampedY, this.targetPos.z);
     }
 
