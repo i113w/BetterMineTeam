@@ -2,6 +2,8 @@ package com.i113w.better_mine_team;
 
 import com.i113w.better_mine_team.client.ClientSetup;
 import com.i113w.better_mine_team.client.ModKeyMappings;
+import com.i113w.better_mine_team.common.registry.ModAttachments; // [新增]
+import com.i113w.better_mine_team.common.registry.ModEntities;     // [新增]
 import com.mojang.logging.LogUtils;
 import com.i113w.better_mine_team.common.config.BMTConfig;
 import net.minecraft.resources.ResourceLocation;
@@ -31,13 +33,18 @@ public class BetterMineTeam {
 
         // 注册配置文件
         modContainer.registerConfig(ModConfig.Type.COMMON, BMTConfig.CONFIG, "better_mine_team.toml");
+
+        // --- 核心注册 ---
         modEventBus.addListener(MTNetworkRegister::registerPayload);
         ModMenuTypes.register(modEventBus);
 
+        ModAttachments.register(modEventBus);
+        ModEntities.register(modEventBus);
+
         // 将屏幕注册移动到 if (CLIENT) 代码块内部
-        // 这样服务器永远不会尝试加载 ClientSetup 类，也就不会触发 Screen 类缺失的错误
         if (FMLEnvironment.dist == Dist.CLIENT) {
             modEventBus.addListener(ClientSetup::registerScreens);
+            modEventBus.addListener(ClientSetup::registerEntityRenderers);
             modEventBus.addListener(ModKeyMappings::onRegisterKeyMappings);
         }
         modEventBus.addListener(this::onConfigLoad);

@@ -8,7 +8,6 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.common.ModConfigSpec;
-import com.i113w.better_mine_team.BetterMineTeam;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 
@@ -59,6 +58,7 @@ public class BMTConfig {
 
     // [新增] 寻路失败阈值
     private static final ModConfigSpec.IntValue followPathFailThreshold;
+    private static final ModConfigSpec.DoubleValue rtsMovementSpeed;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -114,6 +114,12 @@ public class BMTConfig {
                 .comment("How many failed pathfinding attempts before using direct movement.")
                 .comment("Lower values make mobs 'stuck' less often but might cause clipping through walls.")
                 .defineInRange("followPathFailThreshold", 5, 1, 20);
+
+        rtsMovementSpeed = builder
+                .comment("Movement speed multiplier for RTS-controlled units.")
+                .comment("This affects both move and attack commands to ensure consistency.")
+                .defineInRange("rtsMovementSpeed", 1.0, 0.5, 2.0);
+
         builder.pop();
 
         builder.push("dragon");
@@ -241,6 +247,7 @@ public class BMTConfig {
     public static boolean isTeamFocusFireEnabled() { return enableTeamFocusFire.get(); }
     public static int getTeamHateMemoryDuration() { return teamHateMemoryDuration.get(); }
     public static boolean isDebugEnabled() { return enableDebugLogging.get(); }
+    public static double getRtsMovementSpeed() { return rtsMovementSpeed.get(); }
 
     public static double getGuardFollowRange() { return guardFollowRange.get(); }
     public static double getWarPropagationRange() { return warPropagationRange.get(); }

@@ -3,6 +3,7 @@ package com.i113w.better_mine_team.client.gui.screen;
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.client.gui.component.TeamMemberEntry;
 import com.i113w.better_mine_team.client.gui.component.TeamMemberList;
+import com.i113w.better_mine_team.client.rts.RTSCameraManager;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
@@ -63,11 +64,12 @@ public class TeamManagementScreen extends Screen {
         int btnY = this.guiTop;
 
         // RTS 按钮
-        if (ModList.get().isLoaded("bmt_extended")) {
-            this.addRenderableWidget(Button.builder(Component.translatable("better_mine_team.gui.btn.rts_mode"), button -> this.onClose())
-                    .bounds(btnX, btnY, 60, 20)
-                    .build());
-        }
+        this.addRenderableWidget(Button.builder(Component.translatable("better_mine_team.gui.btn.rts_mode"), button -> {
+                    this.onClose();
+                    RTSCameraManager.get().toggleRTSMode();
+                })
+                .bounds(btnX, btnY, 60, 20)
+                .build());
 
         // 关闭按钮
         this.addRenderableWidget(Button.builder(Component.translatable("better_mine_team.gui.btn.close"), button -> this.onClose())

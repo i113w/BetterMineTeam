@@ -36,3 +36,4 @@ Thumbs.db
 *.jar
 # 但不忽略 libs 文件夹里的 jar (如果你有的话)
 !libs/*.jar
+!gradle/wrapper/gradle-wrapper.jar
