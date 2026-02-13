@@ -16,8 +16,12 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.lwjgl.glfw.GLFW;
@@ -67,31 +71,29 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         int btnY = this.topPos + 130;
         int spacing = 22;
 
-        // 使用辅助方法添加按钮，它会自动将 String key 转换为 Component
-        addIconButton(btnX, btnY, MTGuiIcons.ICON_TELEPORT, (btn) -> {
+        // 传送按钮
+        addItemButton(btnX, btnY, Items.ENDER_PEARL, (btn) -> {
             sendAction(TeamManagementPayload.ACTION_TELEPORT, "");
         }, "better_mine_team.gui.tooltip.teleport");
 
-        addIconButton(btnX + spacing, btnY, MTGuiIcons.ICON_RENAME, (btn) -> {
+        // 重命名按钮
+        addItemButton(btnX + spacing, btnY, Items.NAME_TAG, (btn) -> {
             toggleRenameMode();
         }, "better_mine_team.gui.tooltip.rename");
 
-        // [修复] 手动通过 new IconButton 创建时，必须显式调用 Component.translatable
+        // 跟随按钮
         this.followButton = new IconButton(
                 btnX,
                 btnY + spacing,
                 MTGuiIcons.ICON_FOLLOW_OFF,
                 (btn) -> {
                     sendAction(TeamManagementPayload.ACTION_TOGGLE_FOLLOW, "");
-                    // 移除旧的预测逻辑，等待服务器同步
                 },
-                Component.translatable("better_mine_team.gui.tooltip.follow") // 修复处：String -> Component
+                Component.translatable("better_mine_team.gui.tooltip.follow")
         );
         this.addRenderableWidget(this.followButton);
         updateFollowButtonState();
 
-        addIconButton(btnX + spacing, btnY + spacing, MTGuiIcons.ICON_RTS, (btn) -> {
-        }, "better_mine_team.gui.tooltip.rts");
     }
 
     @Override
@@ -133,12 +135,6 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
                 data
         ));
     }
-
-    // 辅助方法：将 String key 自动转为 Component 传入 IconButton
-    private void addIconButton(int x, int y, MTGuiIcons icon, Button.OnPress onPress, String tooltipKey) {
-        this.addRenderableWidget(new IconButton(x, y, icon, onPress, Component.translatable(tooltipKey)));
-    }
-
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (this.isRenaming) {
@@ -156,6 +152,16 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
             }
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    // 辅助方法：添加基于图标的按钮
+    private void addIconButton(int x, int y, MTGuiIcons icon, Button.OnPress onPress, String tooltipKey) {
+        this.addRenderableWidget(new IconButton(x, y, icon, onPress, Component.translatable(tooltipKey)));
+    }
+
+    // 辅助方法：添加基于物品的按钮
+    private void addItemButton(int x, int y, Item item, Button.OnPress onPress, String tooltipKey) {
+        this.addRenderableWidget(new IconButton(x, y, new ItemStack(item), onPress, Component.translatable(tooltipKey)));
     }
 
     @Override
@@ -242,19 +248,33 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         entity.xRotO = xRotO;
     }
 
+    // 升级后的 IconButton 类
     private static class IconButton extends Button {
+        @Nullable
         private MTGuiIcons icon;
+        @Nullable
+        private ItemStack itemStack; // [新增]
         private long lastPressTime = 0;
 
-        // 构造函数参数为 Component
+        // 构造函数 A: 使用 MTGuiIcons
         protected IconButton(int x, int y, MTGuiIcons icon, OnPress onPress, Component tooltip) {
             super(x, y, 20, 20, Component.empty(), onPress, DEFAULT_NARRATION);
             this.icon = icon;
+            this.itemStack = null;
+            this.setTooltip(Tooltip.create(tooltip));
+        }
+
+        // [新增] 构造函数 B: 使用 ItemStack
+        protected IconButton(int x, int y, ItemStack itemStack, OnPress onPress, Component tooltip) {
+            super(x, y, 20, 20, Component.empty(), onPress, DEFAULT_NARRATION);
+            this.itemStack = itemStack;
+            this.icon = null;
             this.setTooltip(Tooltip.create(tooltip));
         }
 
         public void setIcon(MTGuiIcons newIcon) {
             this.icon = newIcon;
+            this.itemStack = null;
         }
 
         @Override
@@ -267,6 +287,7 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         public void renderWidget(@NotNull GuiGraphics gfx, int mouseX, int mouseY, float partialTick) {
             boolean isPressed = System.currentTimeMillis() - lastPressTime < 1000;
 
+            // 1. 渲染按钮底座 (始终来自 MTGuiIcons)
             if (isPressed) {
                 MTGuiIcons.BUTTON_PRESSED.render(gfx, this.getX(), this.getY());
             } else if (this.isHoveredOrFocused()) {
@@ -275,7 +296,13 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
                 MTGuiIcons.BUTTON_NORMAL.render(gfx, this.getX(), this.getY());
             }
 
-            this.icon.render(gfx, this.getX() + 2, this.getY() + 2);
+            // 2. 渲染前景 (图标 或 物品)
+            if (this.itemStack != null) {
+                // 渲染物品 (偏移 2,2 以居中，因为按钮是 20x20，物品是 16x16)
+                gfx.renderItem(this.itemStack, this.getX() + 2, this.getY() + 2);
+            } else if (this.icon != null) {
+                this.icon.render(gfx, this.getX() + 2, this.getY() + 2);
+            }
         }
     }
 }

@@ -13,17 +13,14 @@ public enum MTGuiIcons {
     BUTTON_DISABLED(63, 0, 20, 20),
 
     // --- 1. 功能图标 (16x16) ---
+    // 移除了 TELEPORT 和 RENAME，更新了坐标映射
     ICON_INVENTORY(0, 21, 16, 16),
-    ICON_TELEPORT(17, 21, 16, 16),
-    ICON_FOLLOW_OFF(34, 21, 16, 16),
-    ICON_FOLLOW_ON(51, 21, 16, 16),
-    ICON_KICK(68, 21, 16, 16),
-    ICON_RENAME(85, 21, 16, 16),
-    ICON_CAPTAIN(102, 21, 16, 16),
-    ICON_RTS(119, 21, 16, 16),
-
-    // 锁定图标 (16x16)
-    ICON_LOCKED_INVENTORY(136, 21, 16, 16),
+    ICON_FOLLOW_OFF(17, 21, 16, 16),
+    ICON_FOLLOW_ON(34, 21, 16, 16),
+    ICON_KICK(51, 21, 16, 16),
+    ICON_CAPTAIN(68, 21, 16, 16),
+    ICON_RTS(85, 21, 16, 16),
+    ICON_LOCKED_INVENTORY(102, 21, 16, 16),
 
     // --- 2. 滚动条组件 ---
     SCROLL_TRACK(0, 40, 12, 152),
