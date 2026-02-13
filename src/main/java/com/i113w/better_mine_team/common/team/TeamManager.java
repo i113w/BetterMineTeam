@@ -29,13 +29,9 @@ public class TeamManager {
     // 列表内容的安全性通过 Copy-On-Write 策略在 doAddThreat 中保证
     private static final Map<String, List<ThreatEntry>> teamThreats = new ConcurrentHashMap<>();
 
-    // [新增] 扫描冷却记录，防止团战时 TPS 暴跌
     // Key: TeamName, Value: 上次全图扫描的 GameTime
     private static final Map<String, Long> teamScanCooldowns = new ConcurrentHashMap<>();
 
-    /**
-     * 服务器启动时初始化队伍
-     */
     public static void initTeams(MinecraftServer server) {
         Scoreboard scoreboard = server.getScoreboard();
         for (DyeColor color : DyeColor.values()) {
@@ -49,7 +45,6 @@ public class TeamManager {
             if (formatting != null) {
                 playerTeam.setColor(formatting);
             }
-            // 默认设置：禁止友伤，允许看到隐身队友
             if (playerTeam.getCollisionRule() == net.minecraft.world.scores.Team.CollisionRule.ALWAYS) {
                 playerTeam.setAllowFriendlyFire(false);
                 playerTeam.setSeeFriendlyInvisibles(true);
@@ -57,28 +52,17 @@ public class TeamManager {
         }
     }
 
-    /**
-     * [新增] 清理所有静态数据
-     * 必须在 ServerStoppingEvent 中调用，防止内存泄漏和跨存档数据污染
-     */
     public static void clearAllData() {
         teamThreats.clear();
         teamScanCooldowns.clear();
         BetterMineTeam.debug("TeamManager data cleared.");
     }
 
-    /**
-     * 添加单一仇恨目标
-     */
     public static void addThreat(PlayerTeam team, LivingEntity target) {
         if (team == null || target == null || !target.isAlive()) return;
         doAddThreat(team.getName(), target);
     }
 
-    /**
-     * [优化] 扫描并添加仇恨 (战争迷雾/连锁仇恨)
-     * 包含冷却机制，防止高频调用导致卡顿。
-     */
     public static void scanAndAddThreats(PlayerTeam myTeam, PlayerTeam enemyTeam, LivingEntity center) {
         if (myTeam == null || enemyTeam == null || center == null) return;
 
@@ -117,18 +101,10 @@ public class TeamManager {
         }
     }
 
-    /**
-     * [新增] 重置扫描冷却
-     * 建议在击杀事件(onLivingDeath)中调用，确保击杀后能立即索敌远处的敌人
-     */
     public static void resetScanCooldown(String teamName) {
         teamScanCooldowns.remove(teamName);
     }
 
-    /**
-     * [核心修复] 线程安全的添加仇恨逻辑
-     * 使用 Copy-On-Write 策略：每次修改都创建新列表，避免读取端发生 CME 异常。
-     */
     private static void doAddThreat(String teamName, LivingEntity target) {
         teamThreats.compute(teamName, (key, oldList) -> {
             // 1. 创建新列表 (复制旧数据或新建)
@@ -145,22 +121,14 @@ public class TeamManager {
             if (newList.size() > MAX_THREATS_PER_TEAM) {
                 newList.sort(Comparator.comparingLong(ThreatEntry::timestamp));
                 while (newList.size() > MAX_THREATS_PER_TEAM) {
-                    newList.remove(0); // 移除时间戳最小(最早)的
+                    newList.remove(0);
                 }
             }
-
-            // 5. 返回新列表，原子替换 Map 中的 Value
             return newList;
         });
-
         BetterMineTeam.debug("Threat update for Team {}: {}", teamName, target.getName().getString());
     }
 
-    /**
-     * [核心修复] 获取最佳仇恨目标
-     * 由于 doAddThreat 使用了写时复制，这里获取到的 List 是不可变快照，
-     * 即使其他线程正在写入，这里也不会报错，无需加锁。
-     */
     @Nullable
     public static LivingEntity getBestThreat(PlayerTeam team, LivingEntity seeker) {
         if (team == null || seeker == null) return null;
@@ -168,27 +136,27 @@ public class TeamManager {
         List<ThreatEntry> threats = teamThreats.get(team.getName());
         if (threats == null || threats.isEmpty()) return null;
 
+        // 创建快照以避免并发修改异常 (ConcurrentModificationException)
+        // doAddThreat 使用 compute 更新 Map，这里获取到的可能是会被替换的旧列表，或者是新列表
+        List<ThreatEntry> snapshot = new ArrayList<>(threats);
+
         LivingEntity bestTarget = null;
         double minDistanceSqr = Double.MAX_VALUE;
 
         long currentTime = seeker.level().getGameTime();
         long memoryDuration = BMTConfig.getTeamHateMemoryDuration();
 
-        for (ThreatEntry entry : threats) {
+        for (ThreatEntry entry : snapshot) {
             LivingEntity target = entry.entity();
 
-            // 基础有效性检查
             if (target == null || !target.isAlive() || target.isRemoved()) {
                 continue;
             }
 
-            // [核心修复 1] 绝对禁止攻击自己 (防止 DistSqr: 0.0 刷屏)
             if (target == seeker) {
                 continue;
             }
 
-            // [核心修复 2] 禁止攻击队友 (防止友伤导致的内讧死循环)
-            // 这一步检查比 AI Goal 里的检查更早，能显著提升性能
             if (isAlly(target, seeker)) {
                 continue;
             }
@@ -213,16 +181,9 @@ public class TeamManager {
         return bestTarget;
     }
 
-    /**
-     * 当目标彻底死亡时，从所有队伍的仇恨列表中移除
-     */
     public static void onTargetDeath(LivingEntity deadEntity) {
-        // 遍历所有队伍，移除该实体
         teamThreats.forEach((teamName, list) -> {
-            // 使用 compute 确保线程安全地更新列表
             teamThreats.computeIfPresent(teamName, (k, oldList) -> {
-                // 如果列表中包含该实体，则创建新列表并移除
-                // 这里做一个简单检查避免无意义的复制
                 boolean contains = oldList.stream().anyMatch(e -> e.entity() == deadEntity);
                 if (!contains) return oldList;
 
@@ -273,10 +234,6 @@ public class TeamManager {
         return teamA.getName().equals(teamB.getName()) || teamA.isAlliedTo(teamB);
     }
 
-    /**
-     * 定期清理过期数据
-     * 注意：这里也需要使用原子操作更新 Map
-     */
     public static void cleanupExpiredHateData(MinecraftServer server) {
         long currentTime = server.overworld().getGameTime();
         long memoryDuration = BMTConfig.getTeamHateMemoryDuration();

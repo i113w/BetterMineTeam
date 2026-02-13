@@ -1,10 +1,6 @@
 package com.i113w.better_mine_team.common.init;
 
-import com.i113w.better_mine_team.common.network.DragonControllerPayload;
-import com.i113w.better_mine_team.common.network.DragonDismountPayload;
-import com.i113w.better_mine_team.common.network.OpenTeamGuiPayload;
-import com.i113w.better_mine_team.common.network.TeamActionPayload;
-import com.i113w.better_mine_team.common.network.TeamManagementPayload;
+import com.i113w.better_mine_team.common.network.*;
 import com.i113w.better_mine_team.common.network.handler.ServerPacketHandler;
 import com.i113w.better_mine_team.common.network.rts.C2S_IssueCommandPayload;
 import com.i113w.better_mine_team.common.network.rts.C2S_SelectionSyncPayload;
@@ -70,6 +66,12 @@ public class MTNetworkRegister {
                 S2C_CommandAckPayload.TYPE,
                 S2C_CommandAckPayload.STREAM_CODEC,
                 S2C_CommandAckPayload::clientHandle
+        );
+
+        registrar.playToClient(
+                S2C_SyncTeamLordPayload.TYPE,
+                S2C_SyncTeamLordPayload.STREAM_CODEC,
+                S2C_SyncTeamLordPayload::clientHandle
         );
     }
 }

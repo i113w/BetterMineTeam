@@ -10,8 +10,16 @@ import net.minecraft.world.phys.Vec3;
 public class RTSCameraManager {
     private static final RTSCameraManager INSTANCE = new RTSCameraManager();
 
+    // RTS 模式枚举
+    public enum RTSMode {
+        CONTROL, // 指挥模式
+        RECRUIT  // 征召模式
+    }
+
     // 状态
     private boolean isActive = false;
+    private RTSMode currentMode = RTSMode.CONTROL; // 当前模式
+
     private RTSCameraEntity cameraEntity;
     private Entity originalViewEntity; // 记录进入前的视角（通常是玩家）
 
@@ -21,29 +29,47 @@ public class RTSCameraManager {
     private float targetPitch = 60f; // 默认俯视 60度
     private float zoomLevel = 20f;   // 离地高度
     private static final float DEFAULT_PITCH = 60f;
-    // 限制范围：默认值 ±30度 (即 30度 ~ 90度)
-    private static final float MIN_PITCH = DEFAULT_PITCH - 30f; // 30度 (较平视)
-    private static final float MAX_PITCH = DEFAULT_PITCH + 30f; // 90度 (完全垂直俯视)
-    // 平滑参数
+    private static final float MIN_PITCH = DEFAULT_PITCH - 30f;
+    private static final float MAX_PITCH = DEFAULT_PITCH + 30f;
     private static final float LERP_SPEED = 0.2f;
 
     public static RTSCameraManager get() { return INSTANCE; }
 
+    public void reset() {
+        if (isActive) {
+            exitRTS();
+        }
+        this.cameraEntity = null;
+        this.originalViewEntity = null;
+        this.isActive = false;
+        this.currentMode = RTSMode.CONTROL; // 重置为默认
+        this.targetPos = Vec3.ZERO;
+    }
+
+    // 默认 toggle 进入 CONTROL 模式
     public void toggleRTSMode() {
+        toggleRTSMode(RTSMode.CONTROL);
+    }
+
+    // 指定模式切换
+    public void toggleRTSMode(RTSMode mode) {
         if (isActive) exitRTS();
-        else enterRTS();
+        else enterRTS(mode);
     }
 
     public boolean isActive() { return isActive; }
 
-    private void enterRTS() {
+    // 获取当前模式
+    public RTSMode getMode() { return currentMode; }
+
+    // 增加 mode 参数
+    private void enterRTS(RTSMode mode) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || mc.player == null) return;
 
-        // 1. 保存当前状态
+        this.currentMode = mode; // 设置模式
         this.originalViewEntity = mc.getCameraEntity();
 
-        // 2. 初始化目标位置 (玩家上方)
         Vec3 playerPos = mc.player.getPosition(1.0f);
         this.targetPos = playerPos.add(0, zoomLevel, 0);
         this.targetYaw = mc.player.getYRot();
@@ -53,57 +79,40 @@ public class RTSCameraManager {
             this.targetPos = new Vec3(this.targetPos.x, minHeight + 10, this.targetPos.z);
         }
 
-        // 3. 创建摄像机实体 (仅客户端世界)
         this.cameraEntity = new RTSCameraEntity(ModEntities.RTS_CAMERA.get(), mc.level);
         this.cameraEntity.setPos(this.targetPos);
         this.cameraEntity.setYRot(targetYaw);
         this.cameraEntity.setXRot(targetPitch);
 
-        mc.level.addEntity(this.cameraEntity); // 加入世界以便渲染
-
-        // 4. 接管视角
+        mc.level.addEntity(this.cameraEntity);
         mc.setCameraEntity(this.cameraEntity);
-
-        // 5. 隐藏玩家模型 (可选，避免挡住视野)
-        // mc.player.setInvisible(true); // 警告：直接设隐形可能会导致服务端同步问题，建议用渲染 Mixin 隐藏
 
         this.isActive = true;
     }
 
     public void adjustPitch(float delta) {
         if (!isActive) return;
-
         this.targetPitch += delta;
-
-        // 限制范围
         this.targetPitch = net.minecraft.util.Mth.clamp(this.targetPitch, MIN_PITCH, MAX_PITCH);
     }
+
     private void exitRTS() {
         Minecraft mc = Minecraft.getInstance();
-
-        // 1. 恢复视角
         if (originalViewEntity != null) {
             mc.setCameraEntity(originalViewEntity);
         } else if (mc.player != null) {
             mc.setCameraEntity(mc.player);
         }
-
-        // 2. 清理实体
         if (cameraEntity != null) {
             cameraEntity.remove(Entity.RemovalReason.DISCARDED);
             cameraEntity = null;
         }
-
         this.isActive = false;
     }
 
-    /**
-     * 每帧调用 (RenderTick) 进行平滑插值
-     */
     public void tick(float partialTick) {
         if (!isActive || cameraEntity == null) return;
 
-        // 1. 平滑插值
         double curX = Mth.lerp(LERP_SPEED, cameraEntity.getX(), targetPos.x);
         double curY = Mth.lerp(LERP_SPEED, cameraEntity.getY(), targetPos.y);
         double curZ = Mth.lerp(LERP_SPEED, cameraEntity.getZ(), targetPos.z);
@@ -111,12 +120,10 @@ public class RTSCameraManager {
         float curYaw = Mth.lerp(LERP_SPEED, cameraEntity.getYRot(), targetYaw);
         float curPitch = Mth.lerp(LERP_SPEED, cameraEntity.getXRot(), targetPitch);
 
-        // 2. 应用位置
         cameraEntity.setPos(curX, curY, curZ);
         cameraEntity.setYRot(curYaw);
         cameraEntity.setXRot(curPitch);
 
-        // 关键：强制更新实体的 xo, yo, zo 以保证渲染插值正确
         cameraEntity.xo = curX;
         cameraEntity.yo = curY;
         cameraEntity.zo = curZ;
@@ -124,9 +131,6 @@ public class RTSCameraManager {
         cameraEntity.xRotO = curPitch;
     }
 
-    /**
-     * 处理键盘/鼠标输入带来的位置变化
-     */
     public void handleInput(float moveX, float moveZ, float rotateYaw, float zoomDelta, float moveY) {
         if (!isActive) return;
 
@@ -138,19 +142,15 @@ public class RTSCameraManager {
 
         double dx = (moveX * cos - moveZ * sin) * moveSpeed;
         double dz = (moveZ * cos + moveX * sin) * moveSpeed;
-        double dy = moveY * moveSpeed; // [新增] 垂直移动
+        double dy = moveY * moveSpeed;
 
-        Vec3 newTarget = targetPos.add(dx, dy, dz); // [修改] 加上 dy
-
-        // ... (区块约束逻辑保持不变) ...
-        // ...
-
+        Vec3 newTarget = targetPos.add(dx, dy, dz);
         this.targetPos = newTarget;
         this.targetYaw += rotateYaw * 5.0f;
         this.targetPos = this.targetPos.add(0, zoomDelta * -2.0, 0);
+
         int minHeight = Minecraft.getInstance().level.getMinBuildHeight();
         double clampedY = Mth.clamp(this.targetPos.y, minHeight + 5, 320);
         this.targetPos = new Vec3(this.targetPos.x, clampedY, this.targetPos.z);
     }
-
 }

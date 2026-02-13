@@ -11,7 +11,8 @@ public enum CommandType {
     ATTACK,     // 攻击实体
     INTERACT,   // 交互方块/实体
     STOP,       // 停止/原地待命
-    HOLD;       // 坚守阵地
+    HOLD,       // 坚守阵地
+    RECRUIT;    // 征召/强制入队
 
     // 使用 idMapper 将 Enum 映射为 VarInt，兼容 ByteBuf
     public static final StreamCodec<ByteBuf, CommandType> STREAM_CODEC = ByteBufCodecs.idMapper(

@@ -8,10 +8,6 @@ import org.joml.Matrix4f;
 import java.util.HashSet;
 import java.util.Set;
 
-/**
- * 客户端选择管理器
- * 维护当前的选框状态、选中的实体ID以及用于计算的矩阵缓存
- */
 public class RTSSelectionManager {
     private static final RTSSelectionManager INSTANCE = new RTSSelectionManager();
     private int hoveredEntityId = -1;
@@ -40,8 +36,23 @@ public class RTSSelectionManager {
         return INSTANCE;
     }
 
+    /**
+     * 重置状态 (用于登出清理)
+     */
+    public void reset() {
+        this.selectedEntityIds.clear();
+        this.hoveredEntityId = -1;
+        this.isDragging = false;
+        this.isAttackDragging = false;
+        this.selectionRevision = 0;
+        this.dragStart = Vec2.ZERO;
+        this.dragEnd = Vec2.ZERO;
+        this.attackDragStart = Vec2.ZERO;
+        this.attackDragEnd = Vec2.ZERO;
+    }
+
     public boolean isDragging() { return isDragging; }
-    public Set<Integer> getSelectedIds() { return new HashSet<>(selectedEntityIds); } // 返回副本保护
+    public Set<Integer> getSelectedIds() { return new HashSet<>(selectedEntityIds); }
     public boolean isAttackDragging() { return isAttackDragging; }
 
     public void startAttackDrag(float x, float y) {
@@ -132,5 +143,4 @@ public class RTSSelectionManager {
     public boolean isHovered(Entity entity) {
         return entity != null && entity.getId() == hoveredEntityId;
     }
-
 }

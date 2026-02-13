@@ -41,12 +41,18 @@ import java.util.Set;
 @EventBusSubscriber(modid = BetterMineTeam.MODID, value = Dist.CLIENT)
 public class RTSInputHandler {
 
-    // 资源路径
     private static final ResourceLocation CURSOR_NORMAL = ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "textures/gui/cursors/cursor_normal.png");
     private static final ResourceLocation CURSOR_ATTACK = ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "textures/gui/cursors/cursor_attack.png");
     private static final ResourceLocation CURSOR_ALLY = ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "textures/gui/cursors/cursor_ally.png");
 
-    // --- 1. 核心：屏蔽玩家本体输入 ---
+    // [优化] 性能控制：鼠标悬停检测冷却
+    private static int hoverCheckCooldown = 0;
+    private static final int HOVER_CHECK_INTERVAL = 3; // 每 3 tick 检测一次
+
+    // [优化] 常量定义
+    private static final double EDGE_PITCH_THRESHOLD = 20.0;
+    private static final float EDGE_PITCH_SPEED = 2.0f;
+
     @SubscribeEvent
     public static void onInputUpdate(MovementInputUpdateEvent event) {
         if (RTSCameraManager.get().isActive()) {
@@ -75,15 +81,12 @@ public class RTSInputHandler {
 
         Minecraft mc = Minecraft.getInstance();
 
-        // 强制显示鼠标
         if (mc.mouseHandler.isMouseGrabbed()) {
             mc.mouseHandler.releaseMouse();
         }
 
-        // 更新平滑相机
         cameraManager.tick(mc.getTimer().getGameTimeDeltaPartialTick(false));
 
-        // 处理相机移动 (WASD + Space/Shift)
         float moveX = 0;
         float moveZ = 0;
         float moveY = 0;
@@ -110,8 +113,6 @@ public class RTSInputHandler {
                 GLFW.glfwSetCursorPos(mc.getWindow().getWindow(), centerX, mc.getWindow().getScreenHeight() / 2.0);
             }
         } else {
-            // [新增] 边缘俯仰角 (Edge Pitch)
-            // 仅在未按旋转键时生效，防止冲突
             handleEdgePitch(mc, cameraManager);
         }
 
@@ -119,41 +120,37 @@ public class RTSInputHandler {
             cameraManager.handleInput(moveX, moveZ, rotateYaw, 0, moveY);
         }
 
-        // 更新左键拖拽 (选择)
         if (RTSSelectionManager.get().isDragging()) {
             double mx = mc.mouseHandler.xpos() * mc.getWindow().getGuiScaledWidth() / mc.getWindow().getScreenWidth();
             double my = mc.mouseHandler.ypos() * mc.getWindow().getGuiScaledHeight() / mc.getWindow().getScreenHeight();
             RTSSelectionManager.get().updateDrag((float) mx, (float) my);
         }
 
-        // [新增] 更新右键拖拽 (攻击)
         if (RTSSelectionManager.get().isAttackDragging()) {
             double mx = mc.mouseHandler.xpos() * mc.getWindow().getGuiScaledWidth() / mc.getWindow().getScreenWidth();
             double my = mc.mouseHandler.ypos() * mc.getWindow().getGuiScaledHeight() / mc.getWindow().getScreenHeight();
             RTSSelectionManager.get().updateAttackDrag((float) mx, (float) my);
         }
 
-        // [修复] 更新鼠标悬停实体 (使用物理坐标)
-        updateHoveredEntity(mc);
+        // [优化] 降频检测鼠标悬停实体
+        if (++hoverCheckCooldown >= HOVER_CHECK_INTERVAL) {
+            hoverCheckCooldown = 0;
+            updateHoveredEntity(mc);
+        }
     }
 
-    // [新增] 边缘俯仰角逻辑
     private static void handleEdgePitch(Minecraft mc, RTSCameraManager manager) {
         double y = mc.mouseHandler.ypos();
         double height = mc.getWindow().getHeight();
-        double edgeThreshold = 20.0; // 边缘阈值
-        float pitchSpeed = 2.0f;
 
-        // y=0 是顶部, y=height 是底部
-        if (y < edgeThreshold) {
-            manager.adjustPitch(-pitchSpeed); // 向上看
-        } else if (y > height - edgeThreshold) {
-            manager.adjustPitch(pitchSpeed);  // 向下看
+        if (y < EDGE_PITCH_THRESHOLD) {
+            manager.adjustPitch(-EDGE_PITCH_SPEED);
+        } else if (y > height - EDGE_PITCH_THRESHOLD) {
+            manager.adjustPitch(EDGE_PITCH_SPEED);
         }
     }
 
     private static void updateHoveredEntity(Minecraft mc) {
-        // [修复] 直接使用物理坐标
         double mouseX = mc.mouseHandler.xpos();
         double mouseY = mc.mouseHandler.ypos();
 
@@ -167,7 +164,6 @@ public class RTSInputHandler {
         }
     }
 
-    // --- 4. UI 绘制 (光标 & 退出按钮) ---
     @SubscribeEvent
     public static void onRenderGui(RenderGuiEvent.Post event) {
         if (!RTSCameraManager.get().isActive()) return;
@@ -176,7 +172,6 @@ public class RTSInputHandler {
         int width = mc.getWindow().getGuiScaledWidth();
         int height = mc.getWindow().getGuiScaledHeight();
 
-        // 4.1 绘制 "Exit RTS" 按钮
         int btnW = 80;
         int btnH = 20;
         int btnX = width / 2 - btnW / 2;
@@ -184,7 +179,6 @@ public class RTSInputHandler {
         event.getGuiGraphics().fill(btnX, btnY, btnX + btnW, btnY + btnH, 0x80000000);
         event.getGuiGraphics().drawCenteredString(mc.font, "Exit RTS [ESC]", width / 2, btnY + 6, 0xFFFFFF);
 
-        // 4.2 绘制动态鼠标光标
         double guiMouseX = mc.mouseHandler.xpos() * width / mc.getWindow().getScreenWidth();
         double guiMouseY = mc.mouseHandler.ypos() * height / mc.getWindow().getScreenHeight();
 
@@ -201,12 +195,9 @@ public class RTSInputHandler {
         }
 
         RenderSystem.enableBlend();
-        // 16x16 图标，光标左上角对齐鼠标热点
         event.getGuiGraphics().blit(cursorTexture, (int) guiMouseX, (int) guiMouseY, 0, 0, 16, 16, 16, 16);
         RenderSystem.disableBlend();
     }
-
-    // --- 5. 鼠标与按键事件 ---
 
     @SubscribeEvent
     public static void onKeyInput(InputEvent.Key event) {
@@ -232,7 +223,6 @@ public class RTSInputHandler {
         Minecraft mc = Minecraft.getInstance();
         RTSSelectionManager manager = RTSSelectionManager.get();
 
-        // 退出按钮检测
         if (event.getButton() == GLFW.GLFW_MOUSE_BUTTON_LEFT && event.getAction() == GLFW.GLFW_PRESS) {
             double mx = mc.mouseHandler.xpos() * mc.getWindow().getGuiScaledWidth() / mc.getWindow().getScreenWidth();
             double my = mc.mouseHandler.ypos() * mc.getWindow().getGuiScaledHeight() / mc.getWindow().getScreenHeight();
@@ -252,7 +242,6 @@ public class RTSInputHandler {
             }
         }
 
-        // 5.1 左键：选择逻辑
         if (event.getButton() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             if (event.getAction() == GLFW.GLFW_PRESS) {
                 double mx = mc.mouseHandler.xpos() * mc.getWindow().getGuiScaledWidth() / mc.getWindow().getScreenWidth();
@@ -267,17 +256,13 @@ public class RTSInputHandler {
             }
             event.setCanceled(true);
         }
-        // 5.2 右键：命令逻辑
         else if (event.getButton() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
             if (event.getAction() == GLFW.GLFW_PRESS) {
-                // [修复] 拦截 Press 防止鼠标归位
                 double mx = mc.mouseHandler.xpos() * mc.getWindow().getGuiScaledWidth() / mc.getWindow().getScreenWidth();
                 double my = mc.mouseHandler.ypos() * mc.getWindow().getGuiScaledHeight() / mc.getWindow().getScreenHeight();
-                // [新增] 开始攻击框选
                 manager.startAttackDrag((float) mx, (float) my);
                 event.setCanceled(true);
             } else if (event.getAction() == GLFW.GLFW_RELEASE) {
-                // 结束框选，判断是单击还是框选
                 if (manager.isAttackDragging()) {
                     performBoxAttack();
                     manager.endAttackDrag();
@@ -287,9 +272,6 @@ public class RTSInputHandler {
         }
     }
 
-    // --- 6. 逻辑实现方法 ---
-
-    // 6.1 框选选择 (Left Click)
     private static void performBoxSelection() {
         RTSSelectionManager manager = RTSSelectionManager.get();
         Minecraft mc = Minecraft.getInstance();
@@ -302,9 +284,7 @@ public class RTSInputHandler {
         final double MAX_VERTICAL_RANGE = 50.0;
         final double MAX_HORIZONTAL_RANGE = 128.0;
 
-        // 单击选择
         if (rect.width() < 2 && rect.height() < 2) {
-            // 使用物理坐标进行精准射线检测
             HitResult hit = MouseRayCaster.pickFromMouse(mc.mouseHandler.xpos(), mc.mouseHandler.ypos(), 256.0);
             if (hit.getType() == HitResult.Type.ENTITY) {
                 Entity target = ((EntityHitResult) hit).getEntity();
@@ -313,7 +293,6 @@ public class RTSInputHandler {
                 }
             }
         }
-        // 框选
         else {
             for (Entity entity : mc.level.entitiesForRendering()) {
                 if (!isSelectableEntity(entity, camPos, MAX_VERTICAL_RANGE, MAX_HORIZONTAL_RANGE)) continue;
@@ -331,28 +310,28 @@ public class RTSInputHandler {
         manager.setSelected(newSelection);
     }
 
-    // 6.2 框选攻击 (Right Click)
     private static void performBoxAttack() {
         RTSSelectionManager manager = RTSSelectionManager.get();
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
 
+        if (RTSCameraManager.get().getMode() == RTSCameraManager.RTSMode.RECRUIT) {
+            performRightClickCommand(); // 复用单机确认逻辑
+            return;
+        }
         var rect = manager.getAttackRect();
 
-        // 判定为单击
         if (rect.width() < 2 && rect.height() < 2) {
             performRightClickCommand();
             return;
         }
 
-        // 判定为框选攻击
         List<Integer> targetIds = new ArrayList<>();
         Vec3 camPos = mc.gameRenderer.getMainCamera().getPosition();
 
         for (Entity entity : mc.level.entitiesForRendering()) {
             if (!(entity instanceof LivingEntity) || !entity.isAlive() || entity == mc.player) continue;
 
-            // 过滤掉自己的单位 (可选：让服务端去过滤更好，这里只做粗筛)
             if (TeamManager.isAlly(mc.player, (LivingEntity) entity)) continue;
 
             if (ScreenProjector.isAABBInScreenRect(
@@ -366,14 +345,10 @@ public class RTSInputHandler {
             }
         }
 
-        // 如果框里没有敌人，视为无效操作或移动到中心
         if (targetIds.isEmpty()) {
-            // 这里简单处理：如果没有敌人，就不发指令
-            // 或者你可以计算框中心点执行移动指令
             return;
         }
 
-        // 取第一个为主目标，其余为副目标
         int primaryId = targetIds.get(0);
         targetIds.remove(0);
 
@@ -383,33 +358,49 @@ public class RTSInputHandler {
         PacketDistributor.sendToServer(new C2S_IssueCommandPayload(CommandType.ATTACK, target, targetIds, revision));
     }
 
-    // 6.3 单击命令 (Right Click Single)
     private static void performRightClickCommand() {
         if (RTSSelectionManager.get().getSelectedIds().isEmpty()) return;
 
         Minecraft mc = Minecraft.getInstance();
-
-        // [修复] 使用物理坐标
         double mouseX = mc.mouseHandler.xpos();
         double mouseY = mc.mouseHandler.ypos();
 
-        HitResult hit = MouseRayCaster.pickFromMouse(mouseX, mouseY, 256.0);
+        // [新增] 检查当前模式
+        RTSCameraManager.RTSMode mode = RTSCameraManager.get().getMode();
+        if (mode == RTSCameraManager.RTSMode.RECRUIT) {
+            // --- 征召模式逻辑 ---
+            int revision = RTSSelectionManager.get().getRevision();
+            // 发送 RECRUIT 指令，目标可以为空，因为我们只关心选中的单位
+            // 将 CommandTarget 设为 EMPTY
+            PacketDistributor.sendToServer(new C2S_IssueCommandPayload(
+                    CommandType.RECRUIT,
+                    CommandTarget.EMPTY,
+                    java.util.Collections.emptyList(),
+                    revision
+            ));
 
+            // 可以在这里清空选择，或者等服务端反馈
+            RTSSelectionManager.get().clearSelection();
+            return;
+        }
+
+        // --- 原有指挥模式逻辑 ---
+        HitResult hit = MouseRayCaster.pickFromMouse(mouseX, mouseY, 256.0);
         CommandType type = CommandType.MOVE;
         CommandTarget target = CommandTarget.EMPTY;
 
+        // ... (原有逻辑保持不变)
         if (hit.getType() == HitResult.Type.ENTITY) {
             Entity entity = ((EntityHitResult) hit).getEntity();
             if (!TeamManager.isAlly(mc.player, entity instanceof LivingEntity l ? l : null)) {
                 type = CommandType.ATTACK;
             } else {
-                type = CommandType.MOVE; // 对盟友右键暂时也是移动/跟随
+                type = CommandType.MOVE;
             }
             target = new CommandTarget(entity.position(), entity.getId(), entity.blockPosition());
         } else if (hit.getType() == HitResult.Type.BLOCK) {
+            // ...
             BlockPos pos = ((BlockHitResult) hit).getBlockPos();
-            BlockState state = mc.level.getBlockState(pos);
-            // 简单的交互判定，这里统一视为移动
             type = CommandType.MOVE;
             target = new CommandTarget(hit.getLocation(), -1, pos);
         } else {
@@ -417,8 +408,7 @@ public class RTSInputHandler {
         }
 
         int revision = RTSSelectionManager.get().getRevision();
-        // 发送空列表作为副目标
-        PacketDistributor.sendToServer(new C2S_IssueCommandPayload(type, target, Collections.emptyList(), revision));
+        PacketDistributor.sendToServer(new C2S_IssueCommandPayload(type, target, java.util.Collections.emptyList(), revision));
     }
 
     private static void syncSelectionToServer() {

@@ -2,6 +2,7 @@ package com.i113w.better_mine_team.command;
 
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.network.OpenTeamGuiPayload;
+import com.i113w.better_mine_team.common.network.S2C_SyncTeamLordPayload;
 import com.i113w.better_mine_team.common.team.TeamDataStorage;
 import com.i113w.better_mine_team.common.team.TeamPermissions;
 import com.mojang.authlib.GameProfile;
@@ -167,6 +168,9 @@ public class ManageTeamCommand {
     // --- 逻辑实现: Set TeamsLord ---
     private static int executeSetTeamsLord(CommandContext<CommandSourceStack> context, ServerPlayer targetPlayer, boolean active) {
         TeamPermissions.setOverridePermission(targetPlayer, active);
+
+        PacketDistributor.sendToPlayer(targetPlayer, new S2C_SyncTeamLordPayload(active));
+
         if (active) {
             context.getSource().sendSuccess(() ->
                             Component.translatable("message.better_mine_team.teamslord.granted", targetPlayer.getDisplayName()).withStyle(ChatFormatting.GOLD),

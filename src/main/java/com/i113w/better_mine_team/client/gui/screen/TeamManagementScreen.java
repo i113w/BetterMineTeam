@@ -5,6 +5,7 @@ import com.i113w.better_mine_team.client.gui.component.TeamMemberEntry;
 import com.i113w.better_mine_team.client.gui.component.TeamMemberList;
 import com.i113w.better_mine_team.client.rts.RTSCameraManager;
 import com.i113w.better_mine_team.common.team.TeamManager;
+import com.i113w.better_mine_team.common.team.TeamPermissions;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -62,18 +63,34 @@ public class TeamManagementScreen extends Screen {
         // 初始化按钮 (紧贴内容区右侧)
         int btnX = this.guiLeft + CONTENT_WIDTH + 4;
         int btnY = this.guiTop;
+        int btnHeight = 20;
+        int spacing = 4;
 
         // RTS 按钮
         this.addRenderableWidget(Button.builder(Component.translatable("better_mine_team.gui.btn.rts_mode"), button -> {
                     this.onClose();
-                    RTSCameraManager.get().toggleRTSMode();
+                    RTSCameraManager.get().toggleRTSMode(RTSCameraManager.RTSMode.CONTROL); // 进入指挥模式
                 })
-                .bounds(btnX, btnY, 60, 20)
+                .bounds(btnX, btnY, 60, btnHeight)
                 .build());
 
-        // 关闭按钮
+        btnY += btnHeight + spacing;
+
+        // 2. [新增] Recruit 按钮 (仅限 TeamsLord)
+        if (this.minecraft.player != null && TeamPermissions.hasOverridePermission(this.minecraft.player)) {
+            this.addRenderableWidget(Button.builder(Component.literal("Recruit"), button -> { // 建议添加翻译键 better_mine_team.gui.btn.recruit
+                        this.onClose();
+                        RTSCameraManager.get().toggleRTSMode(RTSCameraManager.RTSMode.RECRUIT); // 进入征召模式
+                    })
+                    .bounds(btnX, btnY, 60, btnHeight)
+                    .build());
+
+            btnY += btnHeight + spacing;
+        }
+
+        // 3. Close 按钮 (始终在最后)
         this.addRenderableWidget(Button.builder(Component.translatable("better_mine_team.gui.btn.close"), button -> this.onClose())
-                .bounds(btnX, btnY + 24, 60, 20)
+                .bounds(btnX, btnY, 60, btnHeight)
                 .build());
     }
 

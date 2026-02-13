@@ -1,6 +1,5 @@
 package com.i113w.better_mine_team.common.network;
 
-// ... 保留原有的 Common Imports (World, Entity, Player 等) ...
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.menu.EntityDetailsMenu;
 import com.i113w.better_mine_team.common.team.TeamDataStorage;
@@ -27,11 +26,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.NotNull;
 
-// [注意] 检查这里，绝对不能有 net.minecraft.client.* 的导入！
-// 如果有，请删除。
-
 public record TeamManagementPayload(int actionType, int targetEntityId, String extraData) implements CustomPacketPayload {
-    // ... 常量定义保持不变 ...
     public static final int ACTION_TELEPORT = 1;
     public static final int ACTION_TOGGLE_FOLLOW = 2;
     public static final int ACTION_KICK = 3;
@@ -64,7 +59,6 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
     }
 
     private static void serverHandle(final TeamManagementPayload payload, final IPayloadContext context) {
-        // ... 服务端逻辑保持不变 (完全安全，因为这里用的都是 ServerPlayer / ServerLevel) ...
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer player)) return;
             ServerLevel level = player.serverLevel();
@@ -85,7 +79,10 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
                 switch (payload.actionType) {
                     case ACTION_TELEPORT -> {
                         if (!isCaptain) { sendPermissionError(player); return; }
-                        if (target.isAlive()) target.teleportTo(player.getX(), player.getY(), player.getZ());
+                        // [修复] 增加类型检查，确保是 LivingEntity 且存活
+                        if (target instanceof LivingEntity living && living.isAlive()) {
+                            target.teleportTo(player.getX(), player.getY(), player.getZ());
+                        }
                     }
                     case ACTION_TOGGLE_FOLLOW -> {
                         if (!isCaptain) { sendPermissionError(player); return; }
@@ -94,7 +91,6 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
                             boolean newState = !current;
                             mob.getPersistentData().putBoolean("bmt_follow_enabled", newState);
 
-                            // 同步状态回客户端
                             TeamManagementPayload syncPacket = new TeamManagementPayload(
                                     ACTION_SYNC_FOLLOW_STATE,
                                     mob.getId(),
@@ -117,15 +113,10 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
                     }
                     case ACTION_RENAME -> {
                         if (!isCaptain) { sendPermissionError(player); return; }
-                        target.setCustomName(Component.literal(payload.extraData));
                         String rawName = payload.extraData;
-                        // [新增] 输入验证
                         if (rawName.length() > 32) rawName = rawName.substring(0, 32);
-                        // 简单的过滤，防止 JSON 注入或其他显示问题
                         String safeName = net.minecraft.ChatFormatting.stripFormatting(rawName);
-
                         target.setCustomName(Component.literal(safeName));
-
                     }
                     case ACTION_SET_CAPTAIN -> {
                         if (!isCaptain) { sendPermissionError(player); return; }
@@ -154,14 +145,12 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
         });
     }
 
-    // 客户端处理逻辑
     private static void clientHandle(final TeamManagementPayload payload, final IPayloadContext context) {
         context.enqueueWork(() -> {
             ClientHandler.handle(payload, context);
         });
     }
 
-    // 内部类隔离
     private static class ClientHandler {
         static void handle(TeamManagementPayload payload, IPayloadContext context) {
             net.minecraft.world.entity.player.Player player = context.player();
@@ -179,7 +168,6 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
         }
     }
 
-    // ... 辅助方法 ...
     private static void sendPermissionError(ServerPlayer player) {
         player.displayClientMessage(Component.translatable("better_mine_team.msg.permission_denied").withStyle(ChatFormatting.RED), true);
     }
