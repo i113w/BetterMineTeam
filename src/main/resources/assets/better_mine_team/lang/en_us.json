@@ -39,5 +39,6 @@
 "better_mine_team.gui.tooltip.teleport": "Teleport Entity",
 "better_mine_team.gui.tooltip.rename": "Rename Entity",
 "better_mine_team.gui.tooltip.follow": "Toggle Follow",
-"better_mine_team.gui.tooltip.rts": "RTS Mode (Coming Soon)"
+"better_mine_team.gui.tooltip.rts": "RTS Mode (Coming Soon)",
+"better_mine_team.msg.auto_captain_granted": "Captain permission is granted successfully"
 }
