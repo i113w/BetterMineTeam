@@ -41,10 +41,20 @@
     *   Added a **Team Management Panel** and a **Member Details Interface**.
     *   The details interface allows you to manage the member's **inventory, armor slots, and main/off-hand items**.
     *   You can toggle the creature's **Follow/Stay state**, **Rename** them, or **Teleport** the creature to your position (requires being within configurable range).
+*   **Real-Time Strategy Command System (RTS Mode)**:
+    *   Added an RTS-style overhead camera for tactical command.
+    *   **Control Mode**: Issue move and attack commands to your teammates with formation support, Attack Move, and intelligent target switching.
+    *   **Recruit Mode**: Players with the advanced permissions (TeamsLord) can forcibly recruit wild mobs into their team.
+    *   Controls:
+        *   Open the Team Management Panel (default `K` key) → Click the "RTS Mode" button.
+        *   WASD to move camera, Mouse Wheel to zoom, Ctrl+Mouse to rotate.
+        *   Left-click to select units (box selection supported), Right-click ground to move, Right-click enemies to attack.
+        *   Press ESC to exit RTS Mode.
+    *   Configuration: Adjustable unit movement speed, pathfinding failure threshold, and more.
 *   **Command System**:
     *   `/mngteam get`: Returns the team and members of a specified player.
     *   `/mngteam set`: Sets the captain or grants advanced permissions.
-    *   `/mngteam menu`: Opens the Team Management Panel.
+    *   `/mngteam menu`: Opens the Team Management Panel (Also allowed to open by clicking `K` Key ).
 *   **Ender Dragon Riding**:
     *   Added Ender Dragon **Taming and Riding** functionality.
     *   Tame the Ender Dragon by right-clicking with a **Golden Apple** (requires advanced permissions).
