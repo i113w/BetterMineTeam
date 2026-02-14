@@ -7,7 +7,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
-import com.i113w.better_mine_team.BetterMineTeam;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import net.minecraftforge.common.ForgeConfigSpec;
@@ -28,6 +27,8 @@ public class BMTConfig {
     private static final ForgeConfigSpec.BooleanValue enableMobTaming;
     private static final ForgeConfigSpec.BooleanValue showInventoryTeamButtons;
 
+    private static final ForgeConfigSpec.BooleanValue autoGrantCaptainOnJoin;
+
     // AI 参数
     private static final ForgeConfigSpec.DoubleValue guardFollowRange;
     private static final ForgeConfigSpec.DoubleValue warPropagationRange;
@@ -45,7 +46,6 @@ public class BMTConfig {
     private static final ForgeConfigSpec.DoubleValue dragonRotationSpeed;
     private static final ForgeConfigSpec.DoubleValue dragonPitchSpeed;
     private static final ForgeConfigSpec.ConfigValue<String> defaultTamingMaterial;
-    // [新增] 专门的龙驯服材料配置
     private static final ForgeConfigSpec.ConfigValue<String> dragonTamingMaterial;
 
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> tamingMaterials;
@@ -53,11 +53,10 @@ public class BMTConfig {
 
     private static final com.google.common.collect.BiMap<EntityType<?>, Ingredient> tamingMaterialMap = com.google.common.collect.HashBiMap.create();
     private static Ingredient cachedDefaultIngredient = Ingredient.of(Items.GOLDEN_APPLE);
-    private static Ingredient cachedDragonIngredient = Ingredient.of(Items.GOLDEN_APPLE); // 缓存龙的材料
+    private static Ingredient cachedDragonIngredient = Ingredient.of(Items.GOLDEN_APPLE);
     private static final Set<EntityType<?>> blacklistedCache = new HashSet<>();
     private static final ForgeConfigSpec.DoubleValue dragonMaxPitch;
 
-    // [新增] 寻路失败阈值
     private static final ForgeConfigSpec.IntValue followPathFailThreshold;
 
     static {
@@ -83,6 +82,10 @@ public class BMTConfig {
         showInventoryTeamButtons = builder
                 .comment("Whether to show the Team/PvP buttons in the inventory screen.")
                 .define("showInventoryTeamButtons", true);
+
+        autoGrantCaptainOnJoin = builder
+                .comment("If true, when a player joins a team that has no other PLAYERS, they will automatically become the captain.")
+                .define("autoGrantCaptainOnJoin", true);
         builder.pop();
 
         builder.push("ai");
@@ -217,7 +220,6 @@ public class BMTConfig {
     private static Ingredient parseIngredientString(String str, net.minecraft.world.item.Item fallback) {
         try {
             if (str.startsWith("#")) {
-                // 标签方式 - 暂不支持，直接返回 fallback
                 BetterMineTeam.LOGGER.warn("Tag-based ingredients not fully supported in this version: {}", str);
                 return Ingredient.of(fallback);
             } else {
@@ -235,6 +237,7 @@ public class BMTConfig {
     public static boolean isTeamFocusFireEnabled() { return enableTeamFocusFire.get(); }
     public static int getTeamHateMemoryDuration() { return teamHateMemoryDuration.get(); }
     public static boolean isDebugEnabled() { return enableDebugLogging.get(); }
+    public static boolean isAutoGrantCaptainEnabled() { return autoGrantCaptainOnJoin.get(); }
 
     public static double getGuardFollowRange() { return guardFollowRange.get(); }
     public static double getWarPropagationRange() { return warPropagationRange.get(); }
@@ -258,11 +261,7 @@ public class BMTConfig {
 
     public static Ingredient getTamingMaterial(EntityType<?> entityType) {
         if (blacklistedCache.contains(entityType)) return Ingredient.EMPTY;
-
-        if (entityType == EntityType.ENDER_DRAGON) {
-            return cachedDragonIngredient;
-        }
-
+        if (entityType == EntityType.ENDER_DRAGON) return cachedDragonIngredient;
         return tamingMaterialMap.getOrDefault(entityType, cachedDefaultIngredient);
     }
     public static float getDragonMaxPitch() { return dragonMaxPitch.get().floatValue(); }

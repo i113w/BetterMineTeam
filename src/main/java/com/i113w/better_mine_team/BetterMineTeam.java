@@ -36,11 +36,13 @@ public class BetterMineTeam {
 
         // 注册菜单类型
         ModMenuTypes.register(modEventBus);
-
+/*
         // 客户端专用注册
         if (FMLEnvironment.dist == Dist.CLIENT) {
             modEventBus.addListener(ModKeyMappings::onRegisterKeyMappings);
         }
+
+ */
 
         // 配置加载/重载监听
         modEventBus.addListener(this::onConfigLoad);
