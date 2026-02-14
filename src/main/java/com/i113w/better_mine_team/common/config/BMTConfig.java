@@ -25,6 +25,8 @@ public class BMTConfig {
     private static final ModConfigSpec.DoubleValue remoteInventoryRange;
     private static final ModConfigSpec.BooleanValue enableMobTaming;
     private static final ModConfigSpec.BooleanValue showInventoryTeamButtons;
+    private static final ModConfigSpec.BooleanValue autoAssignCaptain;
+
 
     // AI 参数
     private static final ModConfigSpec.DoubleValue guardFollowRange;
@@ -83,6 +85,13 @@ public class BMTConfig {
         showInventoryTeamButtons = builder
                 .comment("Whether to show the Team/PvP buttons in the inventory screen.")
                 .define("showInventoryTeamButtons", true);
+        builder.pop();
+
+        builder.push("team_logic");
+        autoAssignCaptain = builder
+                .comment("Automatically assign captain permission when a player joins a team that has no other players.")
+                .comment("This ignores non-player entities (mobs) in the team.")
+                .define("autoAssignCaptain", true);
         builder.pop();
 
         builder.push("ai");
@@ -248,6 +257,7 @@ public class BMTConfig {
     public static int getTeamHateMemoryDuration() { return teamHateMemoryDuration.get(); }
     public static boolean isDebugEnabled() { return enableDebugLogging.get(); }
     public static double getRtsMovementSpeed() { return rtsMovementSpeed.get(); }
+    public static boolean isAutoAssignCaptainEnabled() { return autoAssignCaptain.get(); }
 
     public static double getGuardFollowRange() { return guardFollowRange.get(); }
     public static double getWarPropagationRange() { return warPropagationRange.get(); }

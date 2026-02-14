@@ -38,5 +38,6 @@
 "better_mine_team.gui.tooltip.teleport": "传送单位",
 "better_mine_team.gui.tooltip.rename": "重命名",
 "better_mine_team.gui.tooltip.follow": "切换跟随",
-"better_mine_team.gui.tooltip.rts": "指挥模式 (敬请期待)"
+"better_mine_team.gui.tooltip.rts": "指挥模式 (敬请期待)",
+"better_mine_team.msg.auto_captain_granted": "队长权限已成功授予"
 }
