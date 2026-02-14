@@ -41,13 +41,13 @@
     *   Added a **Team Management Panel** and a **Member Details Interface**.
     *   The details interface allows you to manage the member's **inventory, armor slots, and main/off-hand items**.
     *   You can toggle the creature's **Follow/Stay state**, **Rename** them, or **Teleport** the creature to your position (requires being within configurable range).
-*   **Real-Time Strategy Command System (RTS Mode)**:
+*   **RTS-Style Command System (1.21.1 Only)**:
     *   Added an RTS-style overhead camera for tactical command.
     *   **Control Mode**: Issue move and attack commands to your teammates with formation support, Attack Move, and intelligent target switching.
-    *   **Recruit Mode**: Players with the advanced permissions (TeamsLord) can forcibly recruit wild mobs into their team.
+    *   **Recruit Mode**: Players with `TeamsLord` advanced permissions can instantly recruit wild mobs into their team (Left-click to box select; Right-click to confirm).
     *   Controls:
         *   Open the Team Management Panel (default `K` key) → Click the "RTS Mode" button.
-        *   WASD to move camera, Mouse Wheel to zoom, Ctrl+Mouse to rotate.
+        *   WASD to move camera, Ctrl+Mouse drag to rotate, screen edge auto-adjusts pitch angle.
         *   Left-click to select units (box selection supported), Right-click ground to move, Right-click enemies to attack.
         *   Press ESC to exit RTS Mode.
     *   Configuration: Adjustable unit movement speed, pathfinding failure threshold, and more.
