@@ -7,6 +7,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.projectile.EvokerFangs;
 import net.minecraft.world.scores.PlayerTeam;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -66,20 +67,39 @@ public class LivingEventSubscriber {
     public static void onLivingPvP(LivingIncomingDamageEvent event) {
         LivingEntity hurtEntity = event.getEntity();
         DamageSource source = event.getSource();
-        Entity attackEntity = source.getEntity();
+        Entity attackEntity = source.getEntity(); // 伤害来源实体
+        Entity directEntity = source.getDirectEntity(); // 直接造成伤害的实体
 
-        if (hurtEntity.level() instanceof ServerLevel && attackEntity instanceof LivingEntity livingAttacker && attackEntity != hurtEntity) {
-            PlayerTeam hurtTeam = TeamManager.getTeam(hurtEntity);
-            PlayerTeam attackTeam = TeamManager.getTeam(livingAttacker);
+        if (!(hurtEntity.level() instanceof ServerLevel)) return;
 
-            if (hurtTeam != null && attackTeam != null && hurtTeam.isAlliedTo(attackTeam)) {
-                if (!hurtTeam.isAllowFriendlyFire()) {
+        if (directEntity instanceof EvokerFangs fangs) {
+            LivingEntity owner = fangs.getOwner();
+            if (owner != null) {
+                if (checkFriendlyFire(hurtEntity, owner)) {
                     event.setCanceled(true);
+                    return;
                 }
             }
         }
-    }
 
+        // 常规生物 PvP 检查
+        if (attackEntity instanceof LivingEntity livingAttacker && attackEntity != hurtEntity) {
+            if (checkFriendlyFire(hurtEntity, livingAttacker)) {
+                event.setCanceled(true);
+            }
+        }
+    }
+    // [辅助方法] 检查是否触发友伤保护 (返回 true 表示应该阻止伤害)
+    private static boolean checkFriendlyFire(LivingEntity victim, LivingEntity attacker) {
+        PlayerTeam hurtTeam = TeamManager.getTeam(victim);
+        PlayerTeam attackTeam = TeamManager.getTeam(attacker);
+
+        if (hurtTeam != null && attackTeam != null && hurtTeam.isAlliedTo(attackTeam)) {
+            // 如果是盟友，且不允许友伤 -> 阻止伤害
+            return !hurtTeam.isAllowFriendlyFire();
+        }
+        return false;
+    }
     @SubscribeEvent
     public static void onSetTeamLastHurtMob(LivingIncomingDamageEvent event) {
         LivingEntity hurtEntity = event.getEntity();

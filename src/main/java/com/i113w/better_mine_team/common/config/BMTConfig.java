@@ -6,6 +6,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Items;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.common.ModConfigSpec;
 import com.google.gson.JsonElement;
@@ -26,6 +27,10 @@ public class BMTConfig {
     private static final ModConfigSpec.BooleanValue enableMobTaming;
     private static final ModConfigSpec.BooleanValue showInventoryTeamButtons;
     private static final ModConfigSpec.BooleanValue autoAssignCaptain;
+    private static final ModConfigSpec.BooleanValue enableTeammateCarry;
+    private static final ModConfigSpec.BooleanValue enableSummonAutoJoin;
+    private static final ModConfigSpec.ConfigValue<List<? extends String>> summonAutoJoinBlacklist;
+    private static final Set<EntityType<?>> summonBlacklistCache = new HashSet<>();
 
 
     // AI 参数
@@ -46,7 +51,6 @@ public class BMTConfig {
     private static final ModConfigSpec.DoubleValue dragonPitchSpeed;
 
     private static final ModConfigSpec.ConfigValue<String> defaultTamingMaterial;
-    // [新增] 专门的龙驯服材料配置
     private static final ModConfigSpec.ConfigValue<String> dragonTamingMaterial;
 
     private static final ModConfigSpec.ConfigValue<List<? extends String>> tamingMaterials;
@@ -85,6 +89,12 @@ public class BMTConfig {
         showInventoryTeamButtons = builder
                 .comment("Whether to show the Team/PvP buttons in the inventory screen.")
                 .define("showInventoryTeamButtons", true);
+
+        enableTeammateCarry = builder
+                .comment("Allow players to pick up (Carry On) team members, even if they are hostile mobs or blacklisted.")
+                .comment("Requires 'Carry On' mod to be installed.")
+                .define("enableTeammateCarry", true);
+
         builder.pop();
 
         builder.push("team_logic");
@@ -129,6 +139,13 @@ public class BMTConfig {
                 .comment("This affects both move and attack commands to ensure consistency.")
                 .defineInRange("rtsMovementSpeed", 1.0, 0.5, 2.0);
 
+        enableSummonAutoJoin = builder
+                .comment("Automatically add summoned entities (e.g., Vexes, Wolves) to the owner's team.")
+                .define("enableSummonAutoJoin", true);
+
+        summonAutoJoinBlacklist = builder
+                .comment("List of entity IDs that should NOT auto-join the owner's team when summoned.")
+                .define("summonAutoJoinBlacklist", List.of("minecraft:wither_skull"), o -> true);
         builder.pop();
 
         builder.push("dragon");
@@ -226,6 +243,13 @@ public class BMTConfig {
             catch (Exception ignored) {}
         }
 
+        summonBlacklistCache.clear();
+        for (String id : summonAutoJoinBlacklist.get()) {
+            ResourceLocation rl = ResourceLocation.tryParse(id);
+            if (rl != null) {
+                BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(summonBlacklistCache::add);
+            }
+        }
     }
 
     private static void loadDefaultMaterial() {
@@ -258,6 +282,11 @@ public class BMTConfig {
     public static boolean isDebugEnabled() { return enableDebugLogging.get(); }
     public static double getRtsMovementSpeed() { return rtsMovementSpeed.get(); }
     public static boolean isAutoAssignCaptainEnabled() { return autoAssignCaptain.get(); }
+
+    public static boolean isTeammateCarryEnabled() { return enableTeammateCarry.get(); }
+
+    public static boolean isSummonAutoJoinEnabled() { return enableSummonAutoJoin.get(); }
+    public static boolean isSummonBlacklisted(EntityType<?> type) { return summonBlacklistCache.contains(type); }
 
     public static double getGuardFollowRange() { return guardFollowRange.get(); }
     public static double getWarPropagationRange() { return warPropagationRange.get(); }
