@@ -1,6 +1,8 @@
 package com.i113w.better_mine_team.common.event.subscriber;
 
 import com.i113w.better_mine_team.BetterMineTeam;
+import com.i113w.better_mine_team.common.compat.LoadedCompat;
+import com.i113w.better_mine_team.common.compat.irons_spellbooks.IronsSpellbooksCompat;
 import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.entity.goal.TeamFollowCaptainGoal;
 import com.i113w.better_mine_team.common.entity.goal.TeamHurtByTargetGoal;
@@ -89,7 +91,18 @@ public class MobTeamEventSubscriber {
 
     @Nullable
     private static LivingEntity getSummonOwner(LivingEntity entity) {
-        // 1. OwnableEntity
+        // --- 优先级 1: 模组兼容 ---
+
+        // Iron's Spells n' Spellbooks
+        if (LoadedCompat.IRONS_SPELLBOOKS) {
+            // 这里我们调用一个隔离的类，防止 ClassNotFoundException
+            LivingEntity modOwner = IronsSpellbooksCompat.getSummonOwner(entity);
+            if (modOwner != null) return modOwner;
+        }
+
+        // --- 优先级 2: 原版通用接口 ---
+
+        // OwnableEntity (原版狼、猫、鹦鹉等)
         if (entity instanceof OwnableEntity ownable) {
             Entity owner = ownable.getOwner();
             if (owner instanceof LivingEntity living) return living;
