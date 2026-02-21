@@ -39,11 +39,17 @@ public class ModKeyMappings {
             GLFW.GLFW_KEY_K,
             "key.categories.better_mine_team"
     );
+    public static final KeyMapping RTS_CAMERA_ROTATE = new KeyMapping(
+            "key." + BetterMineTeam.MODID + ".rts_camera_rotate",
+            GLFW.GLFW_KEY_LEFT_ALT,
+            "key.categories." + BetterMineTeam.MODID
+    );
     @SubscribeEvent
     public static void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
         event.register(DRAGON_ACCELERATE);
         event.register(DRAGON_DECELERATE);
         event.register(DRAGON_DISMOUNT);
         event.register(OPEN_TEAM_MENU);
+        event.register(RTS_CAMERA_ROTATE);
     }
 }

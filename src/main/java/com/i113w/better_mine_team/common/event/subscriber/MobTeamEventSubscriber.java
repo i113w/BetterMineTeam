@@ -27,6 +27,10 @@ import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraft.world.entity.OwnableEntity;
+import net.minecraft.world.entity.TraceableEntity;
+import net.minecraft.world.entity.monster.Vex;
+import net.minecraft.world.scores.Scoreboard;
 
 // [关键修改] 实体事件属于 Forge 总线（默认）
 @Mod.EventBusSubscriber(modid = BetterMineTeam.MODID)
@@ -35,7 +39,9 @@ public class MobTeamEventSubscriber {
     @SubscribeEvent
     public static void onEntityJoinWorld(EntityJoinLevelEvent event) {
         if (event.getLevel().isClientSide()) return;
-
+        if (BMTConfig.isSummonAutoJoinEnabled() && event.getEntity() instanceof LivingEntity living) {
+            handleSummonedEntityTeam(living, (ServerLevel) event.getLevel());
+        }
         if (event.getEntity() instanceof Mob mob) {
             mob.targetSelector.addGoal(1, new TeamHurtByTargetGoal(mob));
             mob.goalSelector.addGoal(2, new TeamFollowCaptainGoal(mob,
@@ -96,7 +102,7 @@ public class MobTeamEventSubscriber {
                     }
 
                     livingEntity.setHealth(livingEntity.getMaxHealth());
-                    livingEntity.getPersistentData().putBoolean("bmt_follow_enabled", false);
+                    livingEntity.getPersistentData().putBoolean("bmt_follow_enabled", BMTConfig.getDefaultFollowState());
 
                     if (livingEntity instanceof Mob mob) {
                         mob.setPersistenceRequired();
@@ -114,7 +120,51 @@ public class MobTeamEventSubscriber {
             }
         }
     }
+    private static void handleSummonedEntityTeam(LivingEntity summon, ServerLevel level) {
+        if (BMTConfig.isSummonBlacklisted(summon.getType())) return;
 
+        PlayerTeam existingTeam = TeamManager.getTeam(summon);
+        if (existingTeam != null) return;
+
+        LivingEntity owner = getSummonOwner(summon);
+        if (owner == null) return;
+
+        PlayerTeam ownerTeam = TeamManager.getTeam(owner);
+        if (ownerTeam == null) return;
+
+        Scoreboard scoreboard = level.getScoreboard();
+        scoreboard.addPlayerToTeam(summon.getStringUUID(), ownerTeam);
+
+        var followAttribute = summon.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.FOLLOW_RANGE);
+        if (followAttribute != null) {
+            double newRange = BMTConfig.getGuardFollowRange();
+            if (followAttribute.getBaseValue() < newRange) followAttribute.setBaseValue(newRange);
+        }
+
+        summon.setGlowingTag(true);
+        summon.getPersistentData().putBoolean("bmt_summoned", true);
+
+        BetterMineTeam.debug("Summoned Entity {} auto-joined team {} (Owner: {})",
+                summon.getName().getString(), ownerTeam.getName(), owner.getName().getString());
+    }
+
+    private static LivingEntity getSummonOwner(LivingEntity entity) {
+        // OwnableEntity (原版：狼、猫等)
+        if (entity instanceof OwnableEntity ownable) {
+            Entity owner = ownable.getOwner();
+            if (owner instanceof LivingEntity living) return living;
+        }
+        // Vex
+        if (entity instanceof Vex vex) {
+            return vex.getOwner();
+        }
+        // TraceableEntity
+        if (entity instanceof TraceableEntity traceable) {
+            Entity owner = traceable.getOwner();
+            if (owner instanceof LivingEntity living) return living;
+        }
+        return null;
+    }
     private static void handleDragonInteraction(PlayerInteractEvent.EntityInteract event, Player player, EnderDragon dragon, ItemStack itemstack, Level level) {
         Scoreboard scoreboard = level.getScoreboard();
         PlayerTeam targetTeam = scoreboard.getPlayersTeam(dragon.getStringUUID());

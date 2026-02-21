@@ -4,6 +4,7 @@
   "package": "com.i113w.better_mine_team.common.mixin",
   "compatibilityLevel": "JAVA_17",
   "refmap": "better_mine_team.refmap.json",
+  "plugin": "com.i113w.better_mine_team.common.mixin.plugin.BMTMixinPlugin",
   "mixins": [
     "EnderDragonMixin"
   ],

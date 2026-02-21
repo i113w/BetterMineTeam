@@ -4,6 +4,7 @@ import com.i113w.better_mine_team.client.ClientSetup;
 import com.i113w.better_mine_team.client.ModKeyMappings;
 import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.init.MTNetworkRegister;
+import com.i113w.better_mine_team.common.registry.ModEntities;
 import com.i113w.better_mine_team.common.registry.ModMenuTypes;
 import com.mojang.logging.LogUtils;
 import net.minecraft.resources.ResourceLocation;
@@ -47,6 +48,10 @@ public class BetterMineTeam {
         // 配置加载/重载监听
         modEventBus.addListener(this::onConfigLoad);
         modEventBus.addListener(this::onConfigReload);
+        // RTS
+        ModEntities.register(modEventBus);
+        modEventBus.addListener(ClientSetup::registerEntityRenderers);
+
     }
 
     private void onFMLCommonSetup(FMLCommonSetupEvent event) {

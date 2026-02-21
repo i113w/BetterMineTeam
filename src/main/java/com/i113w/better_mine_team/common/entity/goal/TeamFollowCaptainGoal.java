@@ -4,11 +4,13 @@ import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.team.TeamDataStorage;
 import com.i113w.better_mine_team.common.team.TeamManager;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.scores.PlayerTeam;
 
 import java.util.EnumSet;
@@ -104,11 +106,18 @@ public class TeamFollowCaptainGoal extends Goal {
 
         this.mob.getLookControl().setLookAt(this.captain, 10.0F, (float) this.mob.getMaxHeadXRot());
 
+        // 自动传送检查
+        if (BMTConfig.isFollowTeleportEnabled() && !this.mob.isLeashed() && !this.mob.isPassenger()) {
+            if (this.mob.distanceToSqr(this.captain) >= BMTConfig.getFollowTeleportDistanceSqr()) {
+                teleportToCaptain();
+                return;
+            }
+        }
+
         if (--this.timeToRecalcPath <= 0) {
             this.timeToRecalcPath = 10;
 
             if (!this.mob.isLeashed() && !this.mob.isPassenger()) {
-                // 特殊移动生物直接跳过寻路
                 if (isSpecialMovementMob(this.mob)) {
                     this.mob.getMoveControl().setWantedPosition(
                             this.captain.getX(), this.captain.getY(), this.captain.getZ(), this.speedModifier
@@ -128,6 +137,32 @@ public class TeamFollowCaptainGoal extends Goal {
                 }
             }
         }
+    }
+
+    private void teleportToCaptain() {
+        BlockPos blockpos = this.captain.blockPosition();
+        for (int i = 0; i < 10; ++i) {
+            int dx = this.mob.getRandom().nextInt(7) - 3; // -3 ~ +3
+            int dy = this.mob.getRandom().nextInt(3) - 1; // -1 ~ +1
+            int dz = this.mob.getRandom().nextInt(7) - 3;
+
+            if (Math.abs((double)dx) < 2.0D && Math.abs((double)dz) < 2.0D) continue; // 不传送到脚底下
+
+            BlockPos targetPos = new BlockPos(blockpos.getX() + dx, blockpos.getY() + dy, blockpos.getZ() + dz);
+            if (canTeleportTo(targetPos)) {
+                this.mob.moveTo((double)targetPos.getX() + 0.5D, (double)targetPos.getY(), (double)targetPos.getZ() + 0.5D, this.mob.getYRot(), this.mob.getXRot());
+                this.navigation.stop();
+                return;
+            }
+        }
+    }
+
+    private boolean canTeleportTo(BlockPos pos) {
+        BlockState groundState = this.mob.level().getBlockState(pos.below());
+        if (!groundState.isValidSpawn(this.mob.level(), pos.below(), this.mob.getType())) return false;
+
+        BlockPos offset = pos.subtract(this.mob.blockPosition());
+        return this.mob.level().noCollision(this.mob, this.mob.getBoundingBox().move(offset));
     }
 
     private boolean isSpecialMovementMob(Mob mob) {

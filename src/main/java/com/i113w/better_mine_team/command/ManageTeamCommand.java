@@ -3,6 +3,7 @@ package com.i113w.better_mine_team.command;
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.init.MTNetworkRegister;
 import com.i113w.better_mine_team.common.network.OpenTeamGuiPacket;
+import com.i113w.better_mine_team.common.network.S2C_SyncTeamLordPacket;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -172,6 +173,10 @@ public class ManageTeamCommand {
     // --- 逻辑实现: Set TeamsLord ---
     private static int executeSetTeamsLord(CommandContext<CommandSourceStack> context, ServerPlayer targetPlayer, boolean active) {
         TeamPermissions.setOverridePermission(targetPlayer, active);
+        MTNetworkRegister.CHANNEL.send(
+                PacketDistributor.PLAYER.with(() -> targetPlayer),
+                new S2C_SyncTeamLordPacket(active)
+        );
         if (active) {
             context.getSource().sendSuccess(() ->
                             Component.translatable("message.better_mine_team.teamslord.granted", targetPlayer.getDisplayName()).withStyle(ChatFormatting.GOLD),

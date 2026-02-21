@@ -3,7 +3,9 @@ package com.i113w.better_mine_team.client.gui.screen;
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.client.gui.component.TeamMemberEntry;
 import com.i113w.better_mine_team.client.gui.component.TeamMemberList;
+import com.i113w.better_mine_team.client.rts.RTSCameraManager;
 import com.i113w.better_mine_team.common.team.TeamManager;
+import com.i113w.better_mine_team.common.team.TeamPermissions;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -58,20 +60,42 @@ public class TeamManagementScreen extends Screen {
         refreshMembers();
         this.addRenderableWidget(this.memberList);
 
-        // 初始化按钮 (紧贴内容区右侧)
+        // 初始化按钮 (紧贴内容区右侧)f
         int btnX = this.guiLeft + CONTENT_WIDTH + 4;
         int btnY = this.guiTop;
+        int btnHeight = 20;
+        int spacing = 4;
 
         // RTS 按钮
-        if (ModList.get().isLoaded("bmt_extended")) {
-            this.addRenderableWidget(Button.builder(Component.translatable("better_mine_team.gui.btn.rts_mode"), button -> this.onClose())
-                    .bounds(btnX, btnY, 60, 20)
-                    .build());
-        }
+        this.addRenderableWidget(Button.builder(
+                        Component.translatable("better_mine_team.gui.btn.rts_mode"),
+                        button -> {
+                            this.onClose();
+                            RTSCameraManager.get().toggleRTSMode(RTSCameraManager.RTSMode.CONTROL);
+                        })
+                .bounds(btnX, btnY, 60, btnHeight)
+                .build());
 
+        btnY += btnHeight + spacing;
+
+        // Recruit
+        if (this.minecraft.player != null && TeamPermissions.hasOverridePermission(this.minecraft.player)) {
+            this.addRenderableWidget(Button.builder(
+                            Component.translatable("better_mine_team.gui.btn.recruit"),
+                            button -> {
+                                this.onClose();
+                                RTSCameraManager.get().toggleRTSMode(RTSCameraManager.RTSMode.RECRUIT);
+                            })
+                    .bounds(btnX, btnY, 60, btnHeight)
+                    .build());
+
+            btnY += btnHeight + spacing;
+        }
         // 关闭按钮
-        this.addRenderableWidget(Button.builder(Component.translatable("better_mine_team.gui.btn.close"), button -> this.onClose())
-                .bounds(btnX, btnY + 24, 60, 20)
+        this.addRenderableWidget(Button.builder(
+                        Component.translatable("better_mine_team.gui.btn.close"),
+                        button -> this.onClose())
+                .bounds(btnX, btnY, 60, btnHeight)
                 .build());
     }
 
