@@ -2,7 +2,6 @@ package com.i113w.better_mine_team.command;
 
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.init.MTNetworkRegister;
-import com.i113w.better_mine_team.common.network.OpenTeamGuiPacket;
 import com.i113w.better_mine_team.common.network.S2C_SyncTeamLordPacket;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
