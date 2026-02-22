@@ -28,7 +28,7 @@ public class EntityDetailsMenu extends AbstractContainerMenu {
     private final LivingEntity targetEntity;
 
     public EntityDetailsMenu(int containerId, Inventory playerInv, FriendlyByteBuf extraData) {
-        this(containerId, playerInv, getClientEntity(playerInv, extraData));
+        this(containerId, playerInv, getClientEntityAndSync(playerInv, extraData));
     }
 
     public EntityDetailsMenu(int containerId, Inventory playerInv, LivingEntity entity) {
@@ -99,7 +99,7 @@ public class EntityDetailsMenu extends AbstractContainerMenu {
                 }
                 // === 第4行 (Row 3)：显示村民原生背包 ===
                 else {
-                    if (col < 8) { // 村民背包只有 8 格
+                    if (col < 8) {
                         this.addSlot(new VillagerSlot(villager, villagerContainer, col, x, y));
                     } else {
                         this.addSlot(new DisabledSlot(x, y));
@@ -128,7 +128,7 @@ public class EntityDetailsMenu extends AbstractContainerMenu {
 
     private IItemHandler getUnifiedInventory(LivingEntity entity) {
         // [1.20.1 修改] 使用 LazyOptional 模式
-        return entity.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.ITEM_HANDLER)
+        return entity.getCapability(ForgeCapabilities.ITEM_HANDLER)
                 .orElseGet(() -> {
                     // 回退逻辑：检查是否是 InventoryCarrier
                     if (entity instanceof InventoryCarrier carrier) {
@@ -139,14 +139,15 @@ public class EntityDetailsMenu extends AbstractContainerMenu {
                 });
     }
 
-
-    private static LivingEntity getClientEntity(Inventory playerInv, FriendlyByteBuf data) {
+    // 提取实体并即时同步服务端传来的 Follow 状态
+    private static LivingEntity getClientEntityAndSync(Inventory playerInv, FriendlyByteBuf data) {
         try {
             int entityId = data.readInt();
+            boolean serverFollowState = data.readBoolean(); // 读出搭便车传过来的 Boolean
 
             // 1. 基础空值检查
             if (playerInv.player == null || playerInv.player.level() == null) {
-                return playerInv.player; // 安全回退
+                return playerInv.player;
             }
 
             // 2. 获取实体
@@ -154,6 +155,8 @@ public class EntityDetailsMenu extends AbstractContainerMenu {
 
             // 3. 验证实体有效性 (必须是 LivingEntity 且 活着)
             if (entity instanceof LivingEntity living && living.isAlive()) {
+                // 将服务端的真实状态强制赋予客户端实体，一劳永逸解决图标显示不同步
+                living.getPersistentData().putBoolean("bmt_follow_enabled", serverFollowState);
                 return living;
             }
 
@@ -213,7 +216,7 @@ public class EntityDetailsMenu extends AbstractContainerMenu {
     }
 
     public static class VillagerSlot extends Slot {
-        public VillagerSlot(Villager villager, net.minecraft.world.Container container, int slot, int x, int y) {
+        public VillagerSlot(Villager villager, Container container, int slot, int x, int y) {
             super(container, slot, x, y);
         }
         @Override public void setChanged() { super.setChanged(); }

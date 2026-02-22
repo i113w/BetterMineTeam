@@ -90,7 +90,7 @@ public class BMTConfig {
 
         defaultFollowState = builder.comment("Whether mobs should default to 'Follow' mode when joining a team.").define("defaultFollowState", true);
         enableFollowTeleport = builder.comment("Whether mobs should automatically teleport to the captain when too far away (like vanilla pets).").define("enableFollowTeleport", true);
-        followTeleportDistance = builder.comment("The distance (in blocks) at which a mob will teleport to the captain.").defineInRange("followTeleportDistance", 16.0, 5.0, 128.0);
+        followTeleportDistance = builder.comment("The distance (in blocks) at which a mob will teleport to the captain.").defineInRange("followTeleportDistance", 24.0, 5.0, 128.0);
         builder.pop();
 
         builder.push("rts");

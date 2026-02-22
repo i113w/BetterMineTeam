@@ -54,11 +54,7 @@ public class TeamManagementPacket {
     }
 
     public static TeamManagementPacket decode(FriendlyByteBuf buf) {
-        return new TeamManagementPacket(
-                buf.readVarInt(),
-                buf.readVarInt(),
-                buf.readUtf()
-        );
+        return new TeamManagementPacket(buf.readVarInt(), buf.readVarInt(), buf.readUtf());
     }
 
     public static void handle(TeamManagementPacket msg, Supplier<NetworkEvent.Context> ctx) {
@@ -112,21 +108,12 @@ public class TeamManagementPacket {
                         boolean newState = !current;
                         mob.getPersistentData().putBoolean("bmt_follow_enabled", newState);
 
-                        // 同步状态回客户端
-                        TeamManagementPacket syncPacket = new TeamManagementPacket(
-                                ACTION_SYNC_FOLLOW_STATE,
-                                mob.getId(),
-                                String.valueOf(newState)
-                        );
+                        TeamManagementPacket syncPacket = new TeamManagementPacket(ACTION_SYNC_FOLLOW_STATE, mob.getId(), String.valueOf(newState));
                         com.i113w.better_mine_team.common.init.MTNetworkRegister.CHANNEL.send(
-                                net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
-                                syncPacket
+                                net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player), syncPacket
                         );
 
-                        player.displayClientMessage(
-                                Component.translatable(newState ? "better_mine_team.msg.follow_enabled" : "better_mine_team.msg.follow_disabled"),
-                                true
-                        );
+                        player.displayClientMessage(Component.translatable(newState ? "better_mine_team.msg.follow_enabled" : "better_mine_team.msg.follow_disabled"), true);
                     }
                 }
 
@@ -155,10 +142,7 @@ public class TeamManagementPacket {
                     if (!isCaptain) { sendPermissionError(player); return; }
                     if (target instanceof ServerPlayer targetPlayer) {
                         TeamDataStorage.get(level).setCaptain(playerTeam.getName(), targetPlayer.getUUID());
-                        player.displayClientMessage(
-                                Component.translatable("better_mine_team.msg.captain_transferred", targetPlayer.getName()),
-                                true
-                        );
+                        player.displayClientMessage(Component.translatable("better_mine_team.msg.captain_transferred", targetPlayer.getName()), true);
                     }
                 }
 
@@ -173,14 +157,14 @@ public class TeamManagementPacket {
                                             (id, inventory, p) -> new EntityDetailsMenu(id, inventory, targetPlayer),
                                             targetPlayer.getDisplayName()
                                     ),
-                                    buf -> buf.writeInt(targetPlayer.getId())
+                                    buf -> {
+                                        buf.writeInt(targetPlayer.getId());
+                                        // 写入玩家当前的 Follow 状态
+                                        buf.writeBoolean(targetPlayer.getPersistentData().getBoolean("bmt_follow_enabled"));
+                                    }
                             );
-
                         } else {
-                            player.displayClientMessage(
-                                    Component.translatable("better_mine_team.message.permission_lord_required").withStyle(ChatFormatting.RED),
-                                    true
-                            );
+                            player.displayClientMessage(Component.translatable("better_mine_team.message.permission_lord_required").withStyle(ChatFormatting.RED), true);
                         }
                     } else if (target instanceof LivingEntity livingTarget && livingTarget.isAlive()) {
                         NetworkHooks.openScreen(
@@ -189,7 +173,11 @@ public class TeamManagementPacket {
                                         (id, inventory, p) -> new EntityDetailsMenu(id, inventory, livingTarget),
                                         livingTarget.getDisplayName()
                                 ),
-                                buf -> buf.writeInt(livingTarget.getId())
+                                buf -> {
+                                    buf.writeInt(livingTarget.getId());
+                                    // 写入生物当前的 Follow 状态
+                                    buf.writeBoolean(livingTarget.getPersistentData().getBoolean("bmt_follow_enabled"));
+                                }
                         );
                     }
                 }
@@ -200,27 +188,17 @@ public class TeamManagementPacket {
     }
 
     private static void sendPermissionError(ServerPlayer player) {
-        player.displayClientMessage(
-                Component.translatable("better_mine_team.msg.permission_denied").withStyle(ChatFormatting.RED),
-                true
-        );
+        player.displayClientMessage(Component.translatable("better_mine_team.msg.permission_denied").withStyle(ChatFormatting.RED), true);
     }
-
-    // ==================== 客户端逻辑（内部类隔离）====================
 
     private static class ClientHandler {
         static void handleClientSide(TeamManagementPacket msg) {
-            // 获取客户端玩家
             net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
             net.minecraft.world.entity.player.Player player = mc.player;
-            if (player == null) return;
+            if (player == null || player.level() == null) return;
 
-            Level level = player.level();
-            if (level == null) return;
-
-            // 只处理同步类型的包
             if (msg.actionType == ACTION_SYNC_FOLLOW_STATE) {
-                Entity entity = level.getEntity(msg.targetEntityId);
+                Entity entity = player.level().getEntity(msg.targetEntityId);
                 if (entity != null) {
                     boolean newState = Boolean.parseBoolean(msg.extraData);
                     entity.getPersistentData().putBoolean("bmt_follow_enabled", newState);
