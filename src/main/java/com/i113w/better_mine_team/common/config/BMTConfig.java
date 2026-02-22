@@ -94,7 +94,7 @@ public class BMTConfig {
         builder.pop();
 
         builder.push("rts");
-        RTS_MOVEMENT_SPEED = builder.comment("RTS Movement speed multiplier.").defineInRange("rtsMovementSpeed", 1.2, 0.1, 5.0);
+        RTS_MOVEMENT_SPEED = builder.comment("RTS Movement speed multiplier.").defineInRange("rtsMovementSpeed", 1.0, 0.1, 5.0);
         builder.pop();
 
         builder.push("summon");
