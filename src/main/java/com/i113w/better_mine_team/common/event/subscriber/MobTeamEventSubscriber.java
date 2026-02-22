@@ -49,6 +49,7 @@ public class MobTeamEventSubscriber {
                     BMTConfig.getGuardFollowStopDist()));
         }
     }
+
     private static void handleSummonedEntityTeam(LivingEntity summon, ServerLevel level) {
         // 1. 检查配置黑名单
         if (BMTConfig.isSummonBlacklisted(summon.getType())) return;
@@ -81,9 +82,9 @@ public class MobTeamEventSubscriber {
         // 7. 标记与特效
         summon.setGlowingTag(true);
         summon.getPersistentData().putBoolean("bmt_summoned", true);
-        // 默认禁用跟随，防止召唤物一出来就乱跑，让它们执行默认AI (比如Vex乱飞)
-        // 或者设置为 true 强制跟随。通常召唤物有自己的逻辑，建议 false 或视情况而定。
-        // 这里我们暂时不强制设置 "bmt_follow_enabled"，让它们保持自由行动，但在队伍中。
+
+        // 应用 Config 中的 Follow 默认值
+        summon.getPersistentData().putBoolean("bmt_follow_enabled", BMTConfig.isDefaultFollowEnabled());
 
         BetterMineTeam.debug("Summoned Entity {} auto-joined team {} (Owner: {})",
                 summon.getName().getString(), ownerTeam.getName(), owner.getName().getString());
@@ -171,7 +172,9 @@ public class MobTeamEventSubscriber {
                     }
 
                     livingEntity.setHealth(livingEntity.getMaxHealth());
-                    livingEntity.getPersistentData().putBoolean("bmt_follow_enabled", false);
+
+                    // 应用 Config 中的 Follow 默认值
+                    livingEntity.getPersistentData().putBoolean("bmt_follow_enabled", BMTConfig.isDefaultFollowEnabled());
 
                     if (livingEntity instanceof Mob mob) {
                         mob.setPersistenceRequired();

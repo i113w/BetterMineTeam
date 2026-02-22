@@ -96,7 +96,9 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
                                     mob.getId(),
                                     String.valueOf(newState)
                             );
-                            PacketDistributor.sendToPlayer(player, syncPacket);
+
+                            // [优化] 发送给所有正在追踪该实体的玩家 (包含自己)，防止多玩家看同一个 GUI 时状态撕裂
+                            PacketDistributor.sendToPlayersTrackingEntityAndSelf(mob, syncPacket);
 
                             player.displayClientMessage(Component.translatable(newState ? "better_mine_team.msg.follow_enabled" : "better_mine_team.msg.follow_disabled"), true);
                         }
@@ -135,6 +137,15 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
                                 player.displayClientMessage(Component.translatable("better_mine_team.message.permission_lord_required").withStyle(ChatFormatting.RED), true);
                             }
                         } else if (target instanceof LivingEntity livingTarget && livingTarget.isAlive()) {
+
+                            // boolean 状态发包
+                            boolean followState = livingTarget.getPersistentData().getBoolean("bmt_follow_enabled");
+                            PacketDistributor.sendToPlayer(player, new TeamManagementPayload(
+                                    ACTION_SYNC_FOLLOW_STATE,
+                                    livingTarget.getId(),
+                                    String.valueOf(followState)
+                            ));
+
                             player.openMenu(new SimpleMenuProvider((id, inventory, p) -> new EntityDetailsMenu(id, inventory, livingTarget), livingTarget.getDisplayName()), (buffer) -> buffer.writeInt(livingTarget.getId()));
                         }
                     }
@@ -163,6 +174,7 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
                 if (entity != null) {
                     boolean newState = Boolean.parseBoolean(payload.extraData);
                     entity.getPersistentData().putBoolean("bmt_follow_enabled", newState);
+                    // GUI 的 containerTick 每秒会运行 20 次，会自动读取并刷新图标
                 }
             }
         }

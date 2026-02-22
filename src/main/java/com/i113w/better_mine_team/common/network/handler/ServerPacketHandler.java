@@ -271,11 +271,7 @@ public class ServerPacketHandler {
         for (Mob mob : units) {
             // 2. 检查生物是否已有队伍
             PlayerTeam mobTeam = TeamManager.getTeam(mob);
-            if (mobTeam != null) {
-                // 如果已经有队伍，跳过 (或者如果你想允许抢人，可以去掉这个检查)
-                // 提示：如果要允许抢人，请确保处理好原队伍的仇恨移除
-                continue;
-            }
+            if (mobTeam != null) continue;
 
             // 3. 核心入队逻辑 (参考 MobTeamEventSubscriber)
             scoreboard.addPlayerToTeam(mob.getStringUUID(), playerTeam);
@@ -290,8 +286,10 @@ public class ServerPacketHandler {
             }
 
             mob.setHealth(mob.getMaxHealth());
-            mob.getPersistentData().putBoolean("bmt_follow_enabled", false);
-            mob.setPersistenceRequired(); // 防止刷没
+
+            // 使用 Config 设定的默认值
+            mob.getPersistentData().putBoolean("bmt_follow_enabled", BMTConfig.isDefaultFollowEnabled());
+            mob.setPersistenceRequired();
 
             // 5. 添加 AI 目标
             mob.targetSelector.addGoal(1, new com.i113w.better_mine_team.common.entity.goal.TeamHurtByTargetGoal(mob));

@@ -6,7 +6,6 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Items;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.common.ModConfigSpec;
 import com.google.gson.JsonElement;
@@ -32,8 +31,11 @@ public class BMTConfig {
     private static final ModConfigSpec.ConfigValue<List<? extends String>> summonAutoJoinBlacklist;
     private static final Set<EntityType<?>> summonBlacklistCache = new HashSet<>();
 
-
     // AI 参数
+    private static final ModConfigSpec.BooleanValue defaultFollowEnabled;
+    private static final ModConfigSpec.BooleanValue enableAutoTeleport;
+    private static final ModConfigSpec.DoubleValue autoTeleportDistance;
+
     private static final ModConfigSpec.DoubleValue guardFollowRange;
     private static final ModConfigSpec.DoubleValue warPropagationRange;
     private static final ModConfigSpec.DoubleValue tacticalSwitchRange;
@@ -58,11 +60,10 @@ public class BMTConfig {
 
     private static final com.google.common.collect.BiMap<EntityType<?>, Ingredient> tamingMaterialMap = com.google.common.collect.HashBiMap.create();
     private static Ingredient cachedDefaultIngredient = Ingredient.of(Items.GOLDEN_APPLE);
-    private static Ingredient cachedDragonIngredient = Ingredient.of(Items.GOLDEN_APPLE); // 缓存龙的材料
+    private static Ingredient cachedDragonIngredient = Ingredient.of(Items.GOLDEN_APPLE);
     private static final Set<EntityType<?>> blacklistedCache = new HashSet<>();
     private static final ModConfigSpec.DoubleValue dragonMaxPitch;
 
-    // [新增] 寻路失败阈值
     private static final ModConfigSpec.IntValue followPathFailThreshold;
     private static final ModConfigSpec.DoubleValue rtsMovementSpeed;
 
@@ -105,6 +106,18 @@ public class BMTConfig {
         builder.pop();
 
         builder.push("ai");
+        defaultFollowEnabled = builder
+                .comment("Whether entities should have 'Follow' enabled by default when joining a team.")
+                .define("defaultFollowEnabled", true);
+
+        enableAutoTeleport = builder
+                .comment("Whether team entities following the captain should automatically teleport to them when too far.")
+                .define("enableAutoTeleport", true);
+
+        autoTeleportDistance = builder
+                .comment("The distance at which a following entity will teleport to the captain.")
+                .defineInRange("autoTeleportDistance", 24.0, 5.0, 128.0);
+
         guardFollowRange = builder
                 .comment("The detection range (attributes.follow_range) set for entities when they join a team.")
                 .defineInRange("guardFollowRange", 256.0, 16.0, 1024.0);
@@ -206,59 +219,36 @@ public class BMTConfig {
         blacklistedCache.clear();
         for (String id : blacklistedEntities.get()) {
             ResourceLocation rl = ResourceLocation.tryParse(id);
-            if (rl != null) {
-                BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(blacklistedCache::add);
-            }
+            if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(blacklistedCache::add);
         }
 
         tamingMaterialMap.clear();
-        List<? extends String> materials = tamingMaterials.get();
-
-        for (String entry : materials) {
+        for (String entry : tamingMaterials.get()) {
             try {
                 String[] split = entry.split("-", 2);
-                if (split.length != 2) {
-                    BetterMineTeam.LOGGER.warn("Invalid format for taming material: '{}'. Use 'entity_id-json_ingredient'", entry);
-                    continue;
-                }
-
+                if (split.length != 2) continue;
                 ResourceLocation entityId = ResourceLocation.tryParse(split[0]);
-                String jsonString = split[1];
-
                 if (entityId != null) {
-                    BuiltInRegistries.ENTITY_TYPE.getOptional(entityId).ifPresentOrElse(entityType -> {
+                    BuiltInRegistries.ENTITY_TYPE.getOptional(entityId).ifPresent(entityType -> {
                         try {
-                            JsonElement jsonElement = JsonParser.parseString(jsonString);
+                            JsonElement jsonElement = JsonParser.parseString(split[1]);
                             Ingredient.CODEC_NONEMPTY.parse(JsonOps.INSTANCE, jsonElement)
-                                    .resultOrPartial(err -> BetterMineTeam.LOGGER.error("Failed to parse ingredient JSON for {}: {}", entityId, err))
-                                    .ifPresent(ingredient -> {
-                                        tamingMaterialMap.put(entityType, ingredient);
-                                    });
-                        } catch (Exception e) {
-                            BetterMineTeam.LOGGER.error("JSON syntax error for {}: {}", entityId, e.getMessage());
-                        }
-                    }, () -> BetterMineTeam.LOGGER.warn("Entity type not found: {}", entityId));
+                                    .result().ifPresent(ingredient -> tamingMaterialMap.put(entityType, ingredient));
+                        } catch (Exception ignored) {}
+                    });
                 }
-            }
-            catch (Exception ignored) {}
+            } catch (Exception ignored) {}
         }
 
         summonBlacklistCache.clear();
         for (String id : summonAutoJoinBlacklist.get()) {
             ResourceLocation rl = ResourceLocation.tryParse(id);
-            if (rl != null) {
-                BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(summonBlacklistCache::add);
-            }
+            if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(summonBlacklistCache::add);
         }
     }
 
-    private static void loadDefaultMaterial() {
-        cachedDefaultIngredient = parseIngredientString(defaultTamingMaterial.get(), Items.GOLDEN_APPLE);
-    }
-
-    private static void loadDragonMaterial() {
-        cachedDragonIngredient = parseIngredientString(dragonTamingMaterial.get(), Items.GOLDEN_APPLE);
-    }
+    private static void loadDefaultMaterial() { cachedDefaultIngredient = parseIngredientString(defaultTamingMaterial.get(), Items.GOLDEN_APPLE); }
+    private static void loadDragonMaterial() { cachedDragonIngredient = parseIngredientString(dragonTamingMaterial.get(), Items.GOLDEN_APPLE); }
 
     private static Ingredient parseIngredientString(String str, net.minecraft.world.item.Item fallback) {
         try {
@@ -288,6 +278,10 @@ public class BMTConfig {
     public static boolean isSummonAutoJoinEnabled() { return enableSummonAutoJoin.get(); }
     public static boolean isSummonBlacklisted(EntityType<?> type) { return summonBlacklistCache.contains(type); }
 
+    public static boolean isDefaultFollowEnabled() { return defaultFollowEnabled.get(); }
+    public static boolean isAutoTeleportEnabled() { return enableAutoTeleport.get(); }
+    public static double getAutoTeleportDistanceSqr() { return autoTeleportDistance.get() * autoTeleportDistance.get(); }
+
     public static double getGuardFollowRange() { return guardFollowRange.get(); }
     public static double getWarPropagationRange() { return warPropagationRange.get(); }
     public static double getTacticalSwitchRange() { return tacticalSwitchRange.get(); }
@@ -302,19 +296,11 @@ public class BMTConfig {
     public static float getDragonDeceleration() { return dragonDeceleration.get().floatValue(); }
     public static float getDragonRotationSpeed() { return dragonRotationSpeed.get().floatValue(); }
     public static float getDragonPitchSpeed() { return dragonPitchSpeed.get().floatValue(); }
-    public static double getRemoteInventoryRangeSqr() {
-        double range = remoteInventoryRange.get();
-        return range * range;
-    }
+    public static double getRemoteInventoryRangeSqr() { return remoteInventoryRange.get() * remoteInventoryRange.get(); }
     public static com.google.common.collect.BiMap<EntityType<?>, Ingredient> getTamingMaterialMap() { return tamingMaterialMap; }
-
     public static Ingredient getTamingMaterial(EntityType<?> entityType) {
         if (blacklistedCache.contains(entityType)) return Ingredient.EMPTY;
-
-        if (entityType == EntityType.ENDER_DRAGON) {
-            return cachedDragonIngredient;
-        }
-
+        if (entityType == EntityType.ENDER_DRAGON) return cachedDragonIngredient;
         return tamingMaterialMap.getOrDefault(entityType, cachedDefaultIngredient);
     }
     public static float getDragonMaxPitch() { return dragonMaxPitch.get().floatValue(); }
