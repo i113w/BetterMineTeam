@@ -1,6 +1,8 @@
 package com.i113w.better_mine_team.common.event.subscriber;
 
 import com.i113w.better_mine_team.BetterMineTeam;
+import com.i113w.better_mine_team.common.compat.LoadedCompat;
+import com.i113w.better_mine_team.common.compat.irons_spellbooks.IronsSpellbooksCompat;
 import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.entity.goal.TeamFollowCaptainGoal;
 import com.i113w.better_mine_team.common.entity.goal.TeamHurtByTargetGoal;
@@ -31,6 +33,7 @@ import net.minecraft.world.entity.OwnableEntity;
 import net.minecraft.world.entity.TraceableEntity;
 import net.minecraft.world.entity.monster.Vex;
 import net.minecraft.world.scores.Scoreboard;
+import org.jetbrains.annotations.Nullable;
 
 // [关键修改] 实体事件属于 Forge 总线（默认）
 @Mod.EventBusSubscriber(modid = BetterMineTeam.MODID)
@@ -148,21 +151,36 @@ public class MobTeamEventSubscriber {
                 summon.getName().getString(), ownerTeam.getName(), owner.getName().getString());
     }
 
+    @Nullable
     private static LivingEntity getSummonOwner(LivingEntity entity) {
-        // OwnableEntity (原版：狼、猫等)
+        // --- 优先级 1: 模组兼容 ---
+
+        // Iron's Spells n' Spellbooks
+        if (LoadedCompat.IRONS_SPELLBOOKS) {
+            // 防止未安装模组时引发 ClassNotFoundException
+            LivingEntity modOwner = IronsSpellbooksCompat.getSummonOwner(entity);
+            if (modOwner != null) return modOwner;
+        }
+
+        // --- 优先级 2: 原版通用接口 ---
+
+        // 1. OwnableEntity (原版：狼、猫、鹦鹉等)
         if (entity instanceof OwnableEntity ownable) {
             Entity owner = ownable.getOwner();
             if (owner instanceof LivingEntity living) return living;
         }
-        // Vex
+
+        // 2. Vex (恼鬼)
         if (entity instanceof Vex vex) {
             return vex.getOwner();
         }
-        // TraceableEntity
+
+        // 3. TraceableEntity (通常是一些投射物或其他可溯源实体)
         if (entity instanceof TraceableEntity traceable) {
             Entity owner = traceable.getOwner();
             if (owner instanceof LivingEntity living) return living;
         }
+
         return null;
     }
     private static void handleDragonInteraction(PlayerInteractEvent.EntityInteract event, Player player, EnderDragon dragon, ItemStack itemstack, Level level) {

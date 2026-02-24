@@ -28,6 +28,8 @@ public class BMTConfig {
 
     private static final ForgeConfigSpec.BooleanValue autoGrantCaptainOnJoin;
 
+    private static final ForgeConfigSpec.BooleanValue enableTeammateCarry;
+
     // AI 参数
     private static final ForgeConfigSpec.DoubleValue guardFollowRange;
     private static final ForgeConfigSpec.DoubleValue warPropagationRange;
@@ -77,6 +79,10 @@ public class BMTConfig {
         enableDebugLogging = builder.comment("Enable console debug logging for team logic.").define("enableDebugLogging", false);
         showInventoryTeamButtons = builder.comment("Whether to show the Team/PvP buttons in the inventory screen.").define("showInventoryTeamButtons", true);
         autoGrantCaptainOnJoin = builder.comment("If true, when a player joins a team that has no other PLAYERS, they will automatically become the captain.").define("autoGrantCaptainOnJoin", true);
+        enableTeammateCarry = builder
+                .comment("Allow players to pick up (Carry On) team members, even if they are hostile mobs or blacklisted.")
+                .comment("Requires 'Carry On' mod to be installed.")
+                .define("enableTeammateCarry", true);
         builder.pop();
 
         builder.push("ai");
@@ -175,6 +181,8 @@ public class BMTConfig {
     public static int getTeamHateMemoryDuration() { return teamHateMemoryDuration.get(); }
     public static boolean isDebugEnabled() { return enableDebugLogging.get(); }
     public static boolean isAutoGrantCaptainEnabled() { return autoGrantCaptainOnJoin.get(); }
+
+    public static boolean isTeammateCarryEnabled() { return enableTeammateCarry.get(); }
 
     public static double getGuardFollowRange() { return guardFollowRange.get(); }
     public static double getWarPropagationRange() { return warPropagationRange.get(); }
