@@ -123,11 +123,11 @@ public class BMTConfig {
         enableMobTaming = builder.comment("Whether to allow players to tame mobs using items.").define("enableMobTaming", true);
         defaultTamingMaterial = builder.comment("Default item/tag used to tame mobs if not specified in the list below.").define("defaultTamingMaterial", "minecraft:golden_apple");
         dragonTamingMaterial = builder.comment("Specific item/tag used to tame the Ender Dragon.").define("dragonTamingMaterial", "minecraft:golden_apple");
-        blacklistedEntities = builder.comment("List of entity IDs that cannot be tamed.").define("blacklistedEntities", List.of(""), o -> true);
-        tamingMaterials = builder.comment("List of specific materials for specific entities. Format: 'entity_id-ingredient_json'").define("tamingMaterials", List.of(), value -> {
-            if (value instanceof List<?> list) return list.stream().allMatch(o -> o instanceof String str && str.contains("-{"));
-            return false;
-        });
+        blacklistedEntities = builder.comment("List of entity IDs that cannot be tamed. Example: [\"minecraft:zombie\", \"minecraft:skeleton\"]")
+                .defineListAllowEmpty("blacklistedEntities", List.of(), o -> o instanceof String);
+
+        tamingMaterials = builder.comment("List of specific materials for specific entities. Format: 'entity_id-ingredient_json'. Example: [\"minecraft:zombie-{\\\"item\\\": \\\"minecraft:bone\\\"}\"]")
+                .defineListAllowEmpty("tamingMaterials", List.of(), o -> o instanceof String s && s.contains("-{"));
         builder.pop();
 
         CONFIG = builder.build();
