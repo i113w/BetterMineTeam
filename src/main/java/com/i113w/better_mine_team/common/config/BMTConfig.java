@@ -31,6 +31,12 @@ public class BMTConfig {
     private static final ModConfigSpec.ConfigValue<List<? extends String>> summonAutoJoinBlacklist;
     private static final Set<EntityType<?>> summonBlacklistCache = new HashSet<>();
 
+    // GUI 黑名单
+    private static final ModConfigSpec.ConfigValue<List<? extends String>> teamMemberListBlacklist;
+    private static final ModConfigSpec.ConfigValue<List<? extends String>> entityDetailsScreenBlacklist;
+    private static final Set<EntityType<?>> teamMemberListBlacklistCache = new HashSet<>();
+    private static final Set<EntityType<?>> entityDetailsScreenBlacklistCache = new HashSet<>();
+
     // AI 参数
     private static final ModConfigSpec.BooleanValue defaultFollowEnabled;
     private static final ModConfigSpec.BooleanValue enableAutoTeleport;
@@ -95,7 +101,21 @@ public class BMTConfig {
                 .comment("Allow players to pick up (Carry On) team members, even if they are hostile mobs or blacklisted.")
                 .comment("Requires 'Carry On' mod to be installed.")
                 .define("enableTeammateCarry", true);
+        builder.pop();
 
+        // GUI 黑名单控制区域
+        builder.push("gui");
+        teamMemberListBlacklist = builder
+                .comment("List of entity IDs that will be completely hidden from the Team Management GUI list.")
+                .comment("Hidden entities can still be selected and commanded via RTS mode.")
+                .comment("Example:[\"minecraft:wolf\", \"minecraft:iron_golem\"]")
+                .defineListAllowEmpty("teamMemberListBlacklist", List.of(), o -> o instanceof String);
+
+        entityDetailsScreenBlacklist = builder
+                .comment("List of entity IDs whose inventory/details screen cannot be opened by normal players.")
+                .comment("TeamsLord admins can bypass this restriction.")
+                .comment("Example: [\"minecraft:zombie\", \"minecraft:skeleton\"]")
+                .defineListAllowEmpty("entityDetailsScreenBlacklist", List.of(), o -> o instanceof String);
         builder.pop();
 
         builder.push("team_logic");
@@ -191,16 +211,17 @@ public class BMTConfig {
 
         blacklistedEntities = builder
                 .comment("List of entity IDs that cannot be tamed.")
-                .define("blacklistedEntities", List.of(""), o -> true);
+                .comment("Example: [\"minecraft:zombie\", \"minecraft:skeleton\"]")
+                .defineListAllowEmpty("blacklistedEntities", List.of(), o -> o instanceof String);
 
         tamingMaterials = builder
                 .comment("List of specific materials for specific entities.")
                 .comment("Format: 'entity_id-ingredient_json'")
-                .comment("Example 1: ['minecraft:cow-{\"item\": \"minecraft:wheat\"}']")
-                .comment("Example 2: ['minecraft:sheep-{\"tag\": \"minecraft:wool\"}']")
-                .define("tamingMaterials", List.of(), value -> {
-                    if (value instanceof List<?> list) {
-                        return list.stream().allMatch(o -> o instanceof String str && str.contains("-{"));
+                .comment("Example 1: [\"minecraft:cow-{\\\"item\\\": \\\"minecraft:wheat\\\"}\"]")
+                .comment("Example 2: [\"minecraft:sheep-{\\\"tag\\\": \\\"minecraft:wool\\\"}\"]")
+                .defineListAllowEmpty("tamingMaterials", List.of(), value -> {
+                    if (value instanceof String str) {
+                        return str.contains("-{");
                     }
                     return false;
                 });
@@ -245,6 +266,19 @@ public class BMTConfig {
             ResourceLocation rl = ResourceLocation.tryParse(id);
             if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(summonBlacklistCache::add);
         }
+
+        // 解析并缓存 GUI 黑名单
+        teamMemberListBlacklistCache.clear();
+        for (String id : teamMemberListBlacklist.get()) {
+            ResourceLocation rl = ResourceLocation.tryParse(id);
+            if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(teamMemberListBlacklistCache::add);
+        }
+
+        entityDetailsScreenBlacklistCache.clear();
+        for (String id : entityDetailsScreenBlacklist.get()) {
+            ResourceLocation rl = ResourceLocation.tryParse(id);
+            if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(entityDetailsScreenBlacklistCache::add);
+        }
     }
 
     private static void loadDefaultMaterial() { cachedDefaultIngredient = parseIngredientString(defaultTamingMaterial.get(), Items.GOLDEN_APPLE); }
@@ -272,11 +306,13 @@ public class BMTConfig {
     public static boolean isDebugEnabled() { return enableDebugLogging.get(); }
     public static double getRtsMovementSpeed() { return rtsMovementSpeed.get(); }
     public static boolean isAutoAssignCaptainEnabled() { return autoAssignCaptain.get(); }
-
     public static boolean isTeammateCarryEnabled() { return enableTeammateCarry.get(); }
-
     public static boolean isSummonAutoJoinEnabled() { return enableSummonAutoJoin.get(); }
     public static boolean isSummonBlacklisted(EntityType<?> type) { return summonBlacklistCache.contains(type); }
+
+    // GUI 黑名单 Getters
+    public static boolean isEntityHiddenFromMemberList(EntityType<?> type) { return teamMemberListBlacklistCache.contains(type); }
+    public static boolean isEntityDetailsScreenBlacklisted(EntityType<?> type) { return entityDetailsScreenBlacklistCache.contains(type); }
 
     public static boolean isDefaultFollowEnabled() { return defaultFollowEnabled.get(); }
     public static boolean isAutoTeleportEnabled() { return enableAutoTeleport.get(); }

@@ -47,9 +47,9 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         super(menu, playerInventory, title);
         this.imageWidth = CONTENT_WIDTH;
         this.imageHeight = CONTENT_HEIGHT;
-        this.inventoryLabelX = 84;
-        this.inventoryLabelY = 103 - 10;
-        this.titleLabelX = 84;
+        this.inventoryLabelX = 85;
+        this.inventoryLabelY = 104 - 10;
+        this.titleLabelX = 85;
         this.titleLabelY = 6;
     }
 

@@ -4,6 +4,7 @@ import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.client.gui.component.TeamMemberEntry;
 import com.i113w.better_mine_team.client.gui.component.TeamMemberList;
 import com.i113w.better_mine_team.client.rts.RTSCameraManager;
+import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import com.i113w.better_mine_team.common.team.TeamPermissions;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -78,9 +79,9 @@ public class TeamManagementScreen extends Screen {
 
         // 2. [新增] Recruit 按钮 (仅限 TeamsLord)
         if (this.minecraft.player != null && TeamPermissions.hasOverridePermission(this.minecraft.player)) {
-            this.addRenderableWidget(Button.builder(Component.literal("Recruit"), button -> { // 建议添加翻译键 better_mine_team.gui.btn.recruit
+            this.addRenderableWidget(Button.builder(Component.literal("Recruit"), button -> {
                         this.onClose();
-                        RTSCameraManager.get().toggleRTSMode(RTSCameraManager.RTSMode.RECRUIT); // 进入征召模式
+                        RTSCameraManager.get().toggleRTSMode(RTSCameraManager.RTSMode.RECRUIT);
                     })
                     .bounds(btnX, btnY, 60, btnHeight)
                     .build());
@@ -167,6 +168,9 @@ public class TeamManagementScreen extends Screen {
 
         for (Entity entity : this.minecraft.level.entitiesForRendering()) {
             if (entity instanceof LivingEntity living) {
+                // 黑名单拦截，如果存在于 teamMemberListBlacklist 中，直接跳过 (不在列表中展示)
+                if (BMTConfig.isEntityHiddenFromMemberList(living.getType())) continue;
+
                 PlayerTeam entityTeam = TeamManager.getTeam(living);
                 if (entityTeam != null && entityTeam.getName().equals(myTeam.getName())) {
                     java.util.UUID uuid = living.getUUID();

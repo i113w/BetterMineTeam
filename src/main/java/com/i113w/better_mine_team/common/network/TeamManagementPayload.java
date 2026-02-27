@@ -1,6 +1,7 @@
 package com.i113w.better_mine_team.common.network;
 
 import com.i113w.better_mine_team.BetterMineTeam;
+import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.menu.EntityDetailsMenu;
 import com.i113w.better_mine_team.common.team.TeamDataStorage;
 import com.i113w.better_mine_team.common.team.TeamManager;
@@ -138,7 +139,13 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
                             }
                         } else if (target instanceof LivingEntity livingTarget && livingTarget.isAlive()) {
 
-                            // boolean 状态发包
+                            // 检查实体详情面板黑名单
+                            boolean hasAdmin = TeamPermissions.hasOverridePermission(player);
+                            if (!hasAdmin && BMTConfig.isEntityDetailsScreenBlacklisted(livingTarget.getType())) {
+                                player.displayClientMessage(Component.translatable("better_mine_team.msg.details_blacklisted").withStyle(ChatFormatting.RED), true);
+                                return;
+                            }
+
                             boolean followState = livingTarget.getPersistentData().getBoolean("bmt_follow_enabled");
                             PacketDistributor.sendToPlayer(player, new TeamManagementPayload(
                                     ACTION_SYNC_FOLLOW_STATE,
