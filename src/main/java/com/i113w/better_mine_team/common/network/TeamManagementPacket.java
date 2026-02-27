@@ -1,6 +1,7 @@
 package com.i113w.better_mine_team.common.network;
 
 import com.i113w.better_mine_team.BetterMineTeam;
+import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.menu.EntityDetailsMenu;
 import com.i113w.better_mine_team.common.team.TeamDataStorage;
 import com.i113w.better_mine_team.common.team.TeamManager;
@@ -14,7 +15,6 @@ import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
 import net.minecraftforge.network.NetworkEvent;
@@ -93,6 +93,7 @@ public class TeamManagementPacket {
         }
 
         boolean isCaptain = TeamDataStorage.get(level).isCaptain(player);
+        boolean hasAdmin = TeamPermissions.hasOverridePermission(player);
 
         try {
             switch (msg.actionType) {
@@ -131,9 +132,7 @@ public class TeamManagementPacket {
                 case ACTION_RENAME -> {
                     if (!isCaptain) { sendPermissionError(player); return; }
                     String rawName = msg.extraData;
-                    // 输入验证
                     if (rawName.length() > 32) rawName = rawName.substring(0, 32);
-                    // 简单的过滤，防止 JSON 注入或其他显示问题
                     String safeName = ChatFormatting.stripFormatting(rawName);
                     target.setCustomName(Component.literal(safeName));
                 }
@@ -149,7 +148,6 @@ public class TeamManagementPacket {
                 case ACTION_OPEN_INVENTORY -> {
                     if (target instanceof ServerPlayer targetPlayer) {
                         boolean isSelf = player.getUUID().equals(targetPlayer.getUUID());
-                        boolean hasAdmin = TeamPermissions.hasOverridePermission(player);
                         if (isSelf || hasAdmin) {
                             NetworkHooks.openScreen(
                                     player,
@@ -167,6 +165,12 @@ public class TeamManagementPacket {
                             player.displayClientMessage(Component.translatable("better_mine_team.message.permission_lord_required").withStyle(ChatFormatting.RED), true);
                         }
                     } else if (target instanceof LivingEntity livingTarget && livingTarget.isAlive()) {
+                        // 面板黑名单拦截逻辑
+                        if (!hasAdmin && BMTConfig.isEntityDetailsScreenBlacklisted(livingTarget.getType())) {
+                            player.displayClientMessage(Component.translatable("better_mine_team.msg.details_blacklisted").withStyle(ChatFormatting.RED), true);
+                            return;
+                        }
+
                         NetworkHooks.openScreen(
                                 player,
                                 new SimpleMenuProvider(

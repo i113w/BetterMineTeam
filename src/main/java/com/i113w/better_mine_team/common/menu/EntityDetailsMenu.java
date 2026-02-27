@@ -37,18 +37,17 @@ public class EntityDetailsMenu extends AbstractContainerMenu {
 
         if (entity == null) return;
 
-        // === 1. 左侧面板：通用装备栏 (所有生物都有) ===
-        // 直接操作实体装备槽，不依赖 Capability，确保能给村民穿装备
-        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.HEAD, 60, 17));
-        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.CHEST, 60, 35));
-        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.LEGS, 60, 53));
-        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.FEET, 60, 71));
-        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.MAINHAND, 7, 93));
-        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.OFFHAND, 25, 93));
+        // === 1. 左侧面板：通用装备栏 ===
+        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.HEAD, 61, 18));
+        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.CHEST, 61, 36));
+        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.LEGS, 61, 54));
+        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.FEET, 61, 72));
+        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.MAINHAND, 8, 94));
+        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.OFFHAND, 26, 94));
 
         // === 2. 右侧面板：物品栏区域 ===
-        int gridStartX = 84;
-        int gridStartY = 17;
+        int gridStartX = 85;
+        int gridStartY = 18;
 
         if (entity instanceof Villager villager) {
             // 村民逻辑：混合布局
@@ -62,12 +61,12 @@ public class EntityDetailsMenu extends AbstractContainerMenu {
         // === 3. 玩家背包 ===
         for (int row = 0; row < 3; ++row) {
             for (int col = 0; col < 9; ++col) {
-                this.addSlot(new Slot(playerInv, col + row * 9 + 9, 84 + col * 18, 103 + row * 18));
+                this.addSlot(new Slot(playerInv, col + row * 9 + 9, 85 + col * 18, 104 + row * 18));
             }
         }
         // === 4. 玩家快捷栏 ===
         for (int col = 0; col < 9; ++col) {
-            this.addSlot(new Slot(playerInv, col, 84 + col * 18, 161));
+            this.addSlot(new Slot(playerInv, col, 85 + col * 18, 162));
         }
     }
 
@@ -204,6 +203,7 @@ public class EntityDetailsMenu extends AbstractContainerMenu {
         private final LivingEntity entity;
         private final EquipmentSlot slot;
         public EntityEquipmentSlot(LivingEntity entity, EquipmentSlot slot, int x, int y) {
+            // 利用空的 SimpleContainer 占位
             super(new SimpleContainer(1), 0, x, y);
             this.entity = entity;
             this.slot = slot;
@@ -212,7 +212,30 @@ public class EntityDetailsMenu extends AbstractContainerMenu {
         @Override public void set(@NotNull ItemStack stack) { entity.setItemSlot(slot, stack); setChanged(); }
         @Override public void setChanged() {}
         @Override public boolean mayPlace(@NotNull ItemStack stack) { return true; }
-        @Override public int getMaxStackSize() { return 1; }
+
+
+         // 允许主副手放入多件物品（原先全被硬编码限制成了 1 个）
+
+        @Override
+        public int getMaxStackSize() {
+            return (slot == EquipmentSlot.MAINHAND || slot == EquipmentSlot.OFFHAND) ? 64 : 1;
+        }
+
+
+         // 重写 remove 逻辑，解决提取物品时操作到空 SimpleContainer 的问题
+
+        @Override
+        public @NotNull ItemStack remove(int amount) {
+            ItemStack current = this.getItem();
+            if (current.isEmpty()) {
+                return ItemStack.EMPTY;
+            }
+            // 分离出被玩家拿走的数量
+            ItemStack split = current.split(amount);
+            // 无论剩余多少（哪怕是空），都重新 set 回实体身上，触发原版数据同步
+            this.set(current);
+            return split;
+        }
     }
 
     public static class VillagerSlot extends Slot {

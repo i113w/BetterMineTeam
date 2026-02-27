@@ -48,6 +48,10 @@ public class BMTConfig {
     private static ForgeConfigSpec.BooleanValue SUMMON_AUTO_JOIN;
     private static ForgeConfigSpec.ConfigValue<List<? extends String>> SUMMON_BLACKLIST;
 
+    // GUI Blacklist
+    private static ForgeConfigSpec.ConfigValue<List<? extends String>> teamMemberListBlacklist;
+    private static ForgeConfigSpec.ConfigValue<List<? extends String>> entityDetailsScreenBlacklist;
+
     // Dragon & Taming
     private static final ForgeConfigSpec.BooleanValue enableDragonTaming;
     private static final ForgeConfigSpec.BooleanValue enableDragonRiding;
@@ -69,6 +73,9 @@ public class BMTConfig {
     private static Ingredient cachedDragonIngredient = Ingredient.of(Items.GOLDEN_APPLE);
     private static final Set<EntityType<?>> blacklistedCache = new HashSet<>();
 
+    private static final Set<EntityType<?>> teamMemberBlacklistCache = new HashSet<>();
+    private static final Set<EntityType<?>> entityDetailsBlacklistCache = new HashSet<>();
+
     static {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
 
@@ -79,10 +86,7 @@ public class BMTConfig {
         enableDebugLogging = builder.comment("Enable console debug logging for team logic.").define("enableDebugLogging", false);
         showInventoryTeamButtons = builder.comment("Whether to show the Team/PvP buttons in the inventory screen.").define("showInventoryTeamButtons", true);
         autoGrantCaptainOnJoin = builder.comment("If true, when a player joins a team that has no other PLAYERS, they will automatically become the captain.").define("autoGrantCaptainOnJoin", true);
-        enableTeammateCarry = builder
-                .comment("Allow players to pick up (Carry On) team members, even if they are hostile mobs or blacklisted.")
-                .comment("Requires 'Carry On' mod to be installed.")
-                .define("enableTeammateCarry", true);
+        enableTeammateCarry = builder.comment("Allow players to pick up (Carry On) team members, even if they are hostile mobs or blacklisted.\nRequires 'Carry On' mod to be installed.").define("enableTeammateCarry", true);
         builder.pop();
 
         builder.push("ai");
@@ -93,7 +97,6 @@ public class BMTConfig {
         guardFollowStartDist = builder.comment("Distance at which the entity starts following the captain.").defineInRange("guardFollowStartDist", 10.0, 5.0, 64.0);
         guardFollowStopDist = builder.comment("Distance at which the entity stops following the captain.").defineInRange("guardFollowStopDist", 2.0, 1.0, 16.0);
         followPathFailThreshold = builder.comment("How many failed pathfinding attempts before using direct movement. Lower values make mobs 'stuck' less often but might cause clipping through walls.").defineInRange("followPathFailThreshold", 5, 1, 20);
-
         defaultFollowState = builder.comment("Whether mobs should default to 'Follow' mode when joining a team.").define("defaultFollowState", true);
         enableFollowTeleport = builder.comment("Whether mobs should automatically teleport to the captain when too far away (like vanilla pets).").define("enableFollowTeleport", true);
         followTeleportDistance = builder.comment("The distance (in blocks) at which a mob will teleport to the captain.").defineInRange("followTeleportDistance", 24.0, 5.0, 128.0);
@@ -106,6 +109,19 @@ public class BMTConfig {
         builder.push("summon");
         SUMMON_AUTO_JOIN = builder.comment("Whether summoned creatures automatically join their owner's team.").define("summonAutoJoin", true);
         SUMMON_BLACKLIST = builder.comment("Entity types (resource locations) that should not automatically join a team.").defineListAllowEmpty("summonBlacklist", java.util.List.of(), o -> o instanceof String);
+        builder.pop();
+
+        builder.push("gui");
+        teamMemberListBlacklist = builder
+                .comment("List of entity IDs that will be completely hidden from the Team Management GUI list.")
+                .comment("Hidden entities can still be selected and commanded via RTS mode.")
+                .comment("Example:[\"minecraft:wolf\", \"minecraft:iron_golem\"]")
+                .defineListAllowEmpty("teamMemberListBlacklist", List.of(), o -> o instanceof String);
+        entityDetailsScreenBlacklist = builder
+                .comment("List of entity IDs whose inventory/details screen cannot be opened by normal players.")
+                .comment("TeamsLord admins can bypass this restriction.")
+                .comment("Example: [\"minecraft:zombie\", \"minecraft:skeleton\"]")
+                .defineListAllowEmpty("entityDetailsScreenBlacklist", List.of(), o -> o instanceof String);
         builder.pop();
 
         builder.push("dragon");
@@ -143,6 +159,18 @@ public class BMTConfig {
             if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(blacklistedCache::add);
         }
 
+        teamMemberBlacklistCache.clear();
+        for (String id : teamMemberListBlacklist.get()) {
+            ResourceLocation rl = ResourceLocation.tryParse(id);
+            if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(teamMemberBlacklistCache::add);
+        }
+
+        entityDetailsBlacklistCache.clear();
+        for (String id : entityDetailsScreenBlacklist.get()) {
+            ResourceLocation rl = ResourceLocation.tryParse(id);
+            if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(entityDetailsBlacklistCache::add);
+        }
+
         tamingMaterialMap.clear();
         for (String entry : tamingMaterials.get()) {
             try {
@@ -176,6 +204,9 @@ public class BMTConfig {
         } catch (Exception ignored) {}
         return Ingredient.of(fallback);
     }
+
+    public static boolean isTeamMemberListBlacklisted(EntityType<?> type) { return teamMemberBlacklistCache.contains(type); }
+    public static boolean isEntityDetailsScreenBlacklisted(EntityType<?> type) { return entityDetailsBlacklistCache.contains(type); }
 
     public static boolean isTeamFocusFireEnabled() { return enableTeamFocusFire.get(); }
     public static int getTeamHateMemoryDuration() { return teamHateMemoryDuration.get(); }

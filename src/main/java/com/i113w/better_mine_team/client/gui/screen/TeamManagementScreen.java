@@ -4,6 +4,7 @@ import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.client.gui.component.TeamMemberEntry;
 import com.i113w.better_mine_team.client.gui.component.TeamMemberList;
 import com.i113w.better_mine_team.client.rts.RTSCameraManager;
+import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import com.i113w.better_mine_team.common.team.TeamPermissions;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -17,7 +18,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.scores.PlayerTeam;
-import net.minecraftforge.fml.ModList;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -172,6 +172,9 @@ public class TeamManagementScreen extends Screen {
 
         for (Entity entity : this.minecraft.level.entitiesForRendering()) {
             if (entity instanceof LivingEntity living) {
+                // 黑名单生物不会被加入到客户端实体列表中
+                if (BMTConfig.isTeamMemberListBlacklisted(living.getType())) continue;
+
                 PlayerTeam entityTeam = TeamManager.getTeam(living);
                 if (entityTeam != null && entityTeam.getName().equals(myTeam.getName())) {
                     java.util.UUID uuid = living.getUUID();
@@ -185,20 +188,15 @@ public class TeamManagementScreen extends Screen {
             }
         }
 
-        // 1. 移除已离队的成员 (在缓存中但不在当前 UUID 集合中)
         boolean removedAny = entryCache.keySet().removeIf(uuid -> {
             if (!currentUUIDs.contains(uuid)) {
-                // 从 GUI 列表中移除
                 TeamMemberEntry entry = entryCache.get(uuid);
-                // TeamMemberList 需要暴露 removeEntry 方法，或者我们直接操作 children
-                // 假设 TeamMemberList 继承自 ObjectSelectionList，它有 removeEntry 方法
                 this.memberList.removeEntry(entry);
                 return true;
             }
             return false;
         });
 
-        // 2. 添加新成员
         boolean addedAny = !newMembers.isEmpty();
         if (addedAny) {
             for (LivingEntity member : newMembers) {
@@ -208,7 +206,6 @@ public class TeamManagementScreen extends Screen {
             }
         }
 
-        // 3. 仅当列表发生变动时，重新排序并保持滚动位置
         if (removedAny || addedAny) {
             double scrollAmount = this.memberList.getScrollAmount();
             sortMembers();
@@ -216,50 +213,36 @@ public class TeamManagementScreen extends Screen {
         }
     }
 
-    // [新增] 排序辅助方法
     private void sortMembers() {
-        // 获取当前所有 Entry
         List<TeamMemberEntry> entries = new ArrayList<>(this.memberList.getEntries());
 
         entries.sort((e1, e2) -> {
-            LivingEntity entity1 = e1.getMember(); // 调用刚才在 Entry 中添加的 getter
+            LivingEntity entity1 = e1.getMember();
             LivingEntity entity2 = e2.getMember();
 
-            // 玩家排在前面
             boolean p1 = entity1 instanceof Player;
             boolean p2 = entity2 instanceof Player;
             if (p1 != p2) return p1 ? 1 : -1;
 
-            // 按名字排序
             return entity1.getName().getString().compareToIgnoreCase(entity2.getName().getString());
         });
 
-        // 清空并重新添加 (ObjectSelectionList 没有直接的 replaceEntries，只能 clear + add)
         this.memberList.clearMembers();
         for (TeamMemberEntry entry : entries) {
             this.memberList.addMember(entry);
         }
     }
 
-
-private int tickCounter = 0;
+    private int tickCounter = 0;
     @Override
     public void tick() {
         super.tick();
         this.tickCounter++;
-
-        // 性能优化：每 10 tick (0.5秒) 检查一次列表同步状态
-        // 这比每帧检查极大地节省了 CPU，同时对用户来说几乎是实时的
         if (this.tickCounter >= 10) {
             this.tickCounter = 0;
-            // 重新读取数据并刷新列表
-            // 因为 refreshMembers 内部是基于 Minecraft Client World 的真实数据构建的
-            // 所以只要服务端同步了踢人操作，这里就会自动移除该队友
             refreshMembers();
         }
     }
-
-
 
     @Override
     public boolean isPauseScreen() {
