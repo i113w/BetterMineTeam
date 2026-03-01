@@ -19,7 +19,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -33,7 +32,6 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -63,11 +61,37 @@ public class RTSInputHandler {
         }
     }
 
-    // --- 2. 隐藏原版十字准星 ---
+    // 强制缩小 FOV 获取等距视觉效果
+    @SubscribeEvent
+    public static void onComputeFov(ViewportEvent.ComputeFov event) {
+        if (RTSCameraManager.get().isActive() && RTSCameraManager.get().getCameraStyle() == RTSCameraManager.CameraStyle.RTS) {
+            // 非常小的 FOV 以产生正交错觉
+            event.setFOV(25.0);
+        }
+    }
+
+    // 屏蔽第一人称玩家手臂的渲染
+    @SubscribeEvent
+    public static void onRenderHand(RenderHandEvent event) {
+        if (RTSCameraManager.get().isActive()) {
+            event.setCanceled(true);
+        }
+    }
+
+    // 白名单模式：屏蔽几乎所有原版及其他模组注入的杂乱 GUI 层
     @SubscribeEvent
     public static void onRenderGuiLayer(RenderGuiLayerEvent.Pre event) {
         if (RTSCameraManager.get().isActive()) {
-            if (VanillaGuiLayers.CROSSHAIR.equals(event.getName())) {
+            ResourceLocation layerName = event.getName();
+
+            // 仅放行：聊天框、F3调试界面、TAB玩家列表
+            if (!VanillaGuiLayers.CHAT.equals(layerName) &&
+                    !VanillaGuiLayers.DEBUG_OVERLAY.equals(layerName) &&
+                    !VanillaGuiLayers.TAB_LIST.equals(layerName) &&
+                    !VanillaGuiLayers.OVERLAY_MESSAGE.equals(layerName) &&
+                    !VanillaGuiLayers.TITLE.equals(layerName) &&
+                    !VanillaGuiLayers.SUBTITLE_OVERLAY.equals(layerName)) {
+
                 event.setCanceled(true);
             }
         }
@@ -103,14 +127,24 @@ public class RTSInputHandler {
         boolean isRotateKeyDown = ModKeyMappings.RTS_CAMERA_ROTATE.isDown();
         float rotateYaw = 0;
 
+        // 处理 RTS 相机下的阶跃式偏航角控制
         if (isRotateKeyDown) {
             // 使用鼠标 Delta 进行旋转
             double centerX = mc.getWindow().getScreenWidth() / 2.0;
             double deltaX = mc.mouseHandler.xpos() - centerX;
 
-            if (Math.abs(deltaX) > 5.0) {
-                rotateYaw = (float) (deltaX * 0.05);
-                GLFW.glfwSetCursorPos(mc.getWindow().getWindow(), centerX, mc.getWindow().getScreenHeight() / 2.0);
+            if (cameraManager.getCameraStyle() == RTSCameraManager.CameraStyle.RTS) {
+                // 更大的触发阈值，确保玩家是有意滑动的
+                if (Math.abs(deltaX) > 40.0) {
+                    float step = deltaX > 0 ? 90f : -90f;
+                    cameraManager.snapYaw(step);
+                    GLFW.glfwSetCursorPos(mc.getWindow().getWindow(), centerX, mc.getWindow().getScreenHeight() / 2.0);
+                }
+            } else {
+                if (Math.abs(deltaX) > 5.0) {
+                    rotateYaw = (float) (deltaX * 0.05);
+                    GLFW.glfwSetCursorPos(mc.getWindow().getWindow(), centerX, mc.getWindow().getScreenHeight() / 2.0);
+                }
             }
         } else {
             handleEdgePitch(mc, cameraManager);
@@ -153,14 +187,23 @@ public class RTSInputHandler {
     private static void updateHoveredEntity(Minecraft mc) {
         double mouseX = mc.mouseHandler.xpos();
         double mouseY = mc.mouseHandler.ypos();
-
-        HitResult hit = MouseRayCaster.pickFromMouse(mouseX, mouseY, 512.0);
+        // 由于相机在高空，需加长射线
+        HitResult hit = MouseRayCaster.pickFromMouse(mouseX, mouseY, 1024.0);
 
         if (hit.getType() == HitResult.Type.ENTITY) {
             EntityHitResult entityHit = (EntityHitResult) hit;
             RTSSelectionManager.get().setHoveredEntity(entityHit.getEntity());
         } else {
             RTSSelectionManager.get().setHoveredEntity(null);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onMouseScroll(InputEvent.MouseScrollingEvent event) {
+        if (RTSCameraManager.get().isActive()) {
+            double scrollDelta = event.getScrollDeltaY();
+            RTSCameraManager.get().handleZoom((float) scrollDelta);
+            event.setCanceled(true);
         }
     }
 
@@ -179,6 +222,16 @@ public class RTSInputHandler {
         event.getGuiGraphics().fill(btnX, btnY, btnX + btnW, btnY + btnH, 0x80000000);
         event.getGuiGraphics().drawCenteredString(mc.font, "Exit RTS [ESC]", width / 2, btnY + 6, 0xFFFFFF);
 
+        // 左下角相机模式切换按钮
+        int camBtnW = 90;
+        int camBtnH = 20;
+        int camBtnX = 10;
+        int camBtnY = height - camBtnH - 10;
+        event.getGuiGraphics().fill(camBtnX, camBtnY, camBtnX + camBtnW, camBtnY + camBtnH, 0x80000000);
+        String styleText = RTSCameraManager.get().getCameraStyle() == RTSCameraManager.CameraStyle.RTS ? "Camera: RTS" : "Camera: Free";
+        event.getGuiGraphics().drawCenteredString(mc.font, styleText, camBtnX + camBtnW / 2, camBtnY + 6, 0xFFFFFF);
+
+        // 鼠标渲染逻辑
         double guiMouseX = mc.mouseHandler.xpos() * width / mc.getWindow().getScreenWidth();
         double guiMouseY = mc.mouseHandler.ypos() * height / mc.getWindow().getScreenHeight();
 
@@ -228,15 +281,22 @@ public class RTSInputHandler {
             double my = mc.mouseHandler.ypos() * mc.getWindow().getGuiScaledHeight() / mc.getWindow().getScreenHeight();
 
             int width = mc.getWindow().getGuiScaledWidth();
-            int btnW = 80;
-            int btnH = 20;
-            int btnX = width / 2 - btnW / 2;
-            int btnY = 10;
+            int height = mc.getWindow().getGuiScaledHeight();
 
+            // 顶部的退出按钮判定
+            int btnW = 80, btnH = 20, btnX = width / 2 - btnW / 2, btnY = 10;
             if (mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH) {
                 RTSCameraManager.get().toggleRTSMode();
                 manager.clearSelection();
                 syncSelectionToServer();
+                event.setCanceled(true);
+                return;
+            }
+
+            // 切换相机风格按钮的判定
+            int camBtnW = 90, camBtnH = 20, camBtnX = 10, camBtnY = height - camBtnH - 10;
+            if (mx >= camBtnX && mx <= camBtnX + camBtnW && my >= camBtnY && my <= camBtnY + camBtnH) {
+                RTSCameraManager.get().toggleCameraStyle();
                 event.setCanceled(true);
                 return;
             }
@@ -281,11 +341,12 @@ public class RTSInputHandler {
         Set<Integer> newSelection = new HashSet<>();
         Vec3 camPos = mc.gameRenderer.getMainCamera().getPosition();
 
-        final double MAX_VERTICAL_RANGE = 50.0;
-        final double MAX_HORIZONTAL_RANGE = 128.0;
+        final double MAX_VERTICAL_RANGE = 250.0; // [加宽] 应对抬升后的摄像机
+        final double MAX_HORIZONTAL_RANGE = 256.0;
 
         if (rect.width() < 2 && rect.height() < 2) {
-            HitResult hit = MouseRayCaster.pickFromMouse(mc.mouseHandler.xpos(), mc.mouseHandler.ypos(), 256.0);
+            // [加长] 单点拾取射线
+            HitResult hit = MouseRayCaster.pickFromMouse(mc.mouseHandler.xpos(), mc.mouseHandler.ypos(), 1024.0);
             if (hit.getType() == HitResult.Type.ENTITY) {
                 Entity target = ((EntityHitResult) hit).getEntity();
                 if (isSelectableEntity(target, camPos, MAX_VERTICAL_RANGE, MAX_HORIZONTAL_RANGE)) {
@@ -316,7 +377,7 @@ public class RTSInputHandler {
         if (mc.level == null) return;
 
         if (RTSCameraManager.get().getMode() == RTSCameraManager.RTSMode.RECRUIT) {
-            performRightClickCommand(); // 复用单机确认逻辑
+            performRightClickCommand();
             return;
         }
         var rect = manager.getAttackRect();
@@ -345,9 +406,7 @@ public class RTSInputHandler {
             }
         }
 
-        if (targetIds.isEmpty()) {
-            return;
-        }
+        if (targetIds.isEmpty()) return;
 
         int primaryId = targetIds.get(0);
         targetIds.remove(0);
@@ -384,12 +443,11 @@ public class RTSInputHandler {
             return;
         }
 
-        // --- 原有指挥模式逻辑 ---
-        HitResult hit = MouseRayCaster.pickFromMouse(mouseX, mouseY, 256.0);
+        // [加长] 右键点阵投射射线到 1024
+        HitResult hit = MouseRayCaster.pickFromMouse(mouseX, mouseY, 1024.0);
         CommandType type = CommandType.MOVE;
         CommandTarget target = CommandTarget.EMPTY;
 
-        // ... (原有逻辑保持不变)
         if (hit.getType() == HitResult.Type.ENTITY) {
             Entity entity = ((EntityHitResult) hit).getEntity();
             if (!TeamManager.isAlly(mc.player, entity instanceof LivingEntity l ? l : null)) {
@@ -399,7 +457,6 @@ public class RTSInputHandler {
             }
             target = new CommandTarget(entity.position(), entity.getId(), entity.blockPosition());
         } else if (hit.getType() == HitResult.Type.BLOCK) {
-            // ...
             BlockPos pos = ((BlockHitResult) hit).getBlockPos();
             type = CommandType.MOVE;
             target = new CommandTarget(hit.getLocation(), -1, pos);

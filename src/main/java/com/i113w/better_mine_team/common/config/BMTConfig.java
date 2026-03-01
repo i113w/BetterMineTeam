@@ -128,7 +128,7 @@ public class BMTConfig {
         builder.push("ai");
         defaultFollowEnabled = builder
                 .comment("Whether entities should have 'Follow' enabled by default when joining a team.")
-                .define("defaultFollowEnabled", true);
+                .define("defaultFollowEnabled", false);
 
         enableAutoTeleport = builder
                 .comment("Whether team entities following the captain should automatically teleport to them when too far.")
