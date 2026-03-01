@@ -8,6 +8,7 @@ version="${mod_version}"
 displayName="${mod_name}"
 authors="${mod_authors}"
 description='''${mod_description}'''
+logoFile="better_mine_team.png"
 
 # [关键修改] displayURL 和 updateJSONURL 可选
 # displayURL="https://your-mod-page.example.com"

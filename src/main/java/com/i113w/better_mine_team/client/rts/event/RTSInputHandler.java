@@ -56,16 +56,49 @@ public class RTSInputHandler {
         }
     }
 
-    // ─── 2. 隐藏原版十字准星 ──────────────────────────────────────────────────
-    // NamedGuiOverlay 与 VanillaGuiOverlay enum 类型不同，无法直接 ==。
-    // 改为通过 overlay 的 ResourceLocation id 的 path 段匹配。
-    // Forge 1.20.1 中准星 overlay 的 id path 为 "crosshair"。
+    // ─── 强制缩小 FOV 获取等距视觉效果 ─────────────────────────────────────
+    @SubscribeEvent
+    public static void onComputeFov(ViewportEvent.ComputeFov event) {
+        if (RTSCameraManager.get().isActive() && RTSCameraManager.get().getCameraStyle() == RTSCameraManager.CameraStyle.RTS) {
+            // 非常小的 FOV 以产生正交错觉
+            event.setFOV(25.0);
+        }
+    }
+
+    // ─── 屏蔽第一人称玩家手臂的渲染 ───────────────────────────────────────
+    @SubscribeEvent
+    public static void onRenderHand(RenderHandEvent event) {
+        if (RTSCameraManager.get().isActive()) {
+            event.setCanceled(true);
+        }
+    }
+
+    // ─── 2. 隐藏原版十字准星及其他不需要的 GUI 层 (白名单模式) ──────────────────────
     @SubscribeEvent
     public static void onRenderGuiOverlayPre(RenderGuiOverlayEvent.Pre event) {
         if (RTSCameraManager.get().isActive()) {
-            if ("crosshair".equals(event.getOverlay().id().getPath())) {
+            ResourceLocation currentId = event.getOverlay().id();
+
+            if (!currentId.equals(VanillaGuiOverlay.CHAT_PANEL.id()) &&
+                    !currentId.equals(VanillaGuiOverlay.DEBUG_TEXT.id()) &&
+                    !currentId.equals(VanillaGuiOverlay.PLAYER_LIST.id()) &&
+                    !currentId.equals(VanillaGuiOverlay.TITLE_TEXT.id()) &&
+                    !currentId.equals(VanillaGuiOverlay.SUBTITLES.id()) &&
+                    !currentId.equals(VanillaGuiOverlay.RECORD_OVERLAY.id())) {
+
                 event.setCanceled(true);
             }
+        }
+    }
+
+    // ─── 鼠标滚轮缩放 ───────────────────────────────────────────────────
+    @SubscribeEvent
+    public static void onMouseScroll(InputEvent.MouseScrollingEvent event) {
+        if (RTSCameraManager.get().isActive()) {
+            // Forge 1.20.1 使用 getScrollDelta()
+            double scrollDelta = event.getScrollDelta();
+            RTSCameraManager.get().handleZoom((float) scrollDelta);
+            event.setCanceled(true);
         }
     }
 
@@ -83,7 +116,8 @@ public class RTSInputHandler {
             mc.mouseHandler.releaseMouse();
         }
 
-        cameraManager.tick(0f);
+        // 传入帧时间 (支持平滑补间)
+        cameraManager.tick(mc.getFrameTime());
 
         float moveX = 0, moveZ = 0, moveY = 0;
         if (mc.options.keyUp.isDown())    moveZ += 1;
@@ -99,13 +133,19 @@ public class RTSInputHandler {
         if (isRotateKeyDown) {
             double centerX = mc.getWindow().getScreenWidth() / 2.0;
             double deltaX  = mc.mouseHandler.xpos() - centerX;
-            if (Math.abs(deltaX) > 5.0) {
-                rotateYaw = (float)(deltaX * 0.05);
-                GLFW.glfwSetCursorPos(
-                        mc.getWindow().getWindow(),
-                        centerX,
-                        mc.getWindow().getScreenHeight() / 2.0
-                );
+
+            // 融合进来的 RTS 阶跃式旋转逻辑
+            if (cameraManager.getCameraStyle() == RTSCameraManager.CameraStyle.RTS) {
+                if (Math.abs(deltaX) > 40.0) {
+                    float step = deltaX > 0 ? 90f : -90f;
+                    cameraManager.snapYaw(step);
+                    GLFW.glfwSetCursorPos(mc.getWindow().getWindow(), centerX, mc.getWindow().getScreenHeight() / 2.0);
+                }
+            } else {
+                if (Math.abs(deltaX) > 5.0) {
+                    rotateYaw = (float)(deltaX * 0.05);
+                    GLFW.glfwSetCursorPos(mc.getWindow().getWindow(), centerX, mc.getWindow().getScreenHeight() / 2.0);
+                }
             }
         } else {
             handleEdgePitch(mc, cameraManager);
@@ -147,6 +187,15 @@ public class RTSInputHandler {
         int btnX = width / 2 - btnW / 2, btnY = 10;
         event.getGuiGraphics().fill(btnX, btnY, btnX + btnW, btnY + btnH, 0x80000000);
         event.getGuiGraphics().drawCenteredString(mc.font, "Exit RTS [ESC]", width / 2, btnY + 6, 0xFFFFFF);
+
+        // 左下角相机模式切换按钮
+        int camBtnW = 90;
+        int camBtnH = 20;
+        int camBtnX = 10;
+        int camBtnY = height - camBtnH - 10;
+        event.getGuiGraphics().fill(camBtnX, camBtnY, camBtnX + camBtnW, camBtnY + camBtnH, 0x80000000);
+        String styleText = RTSCameraManager.get().getCameraStyle() == RTSCameraManager.CameraStyle.RTS ? "Camera: RTS" : "Camera: Free";
+        event.getGuiGraphics().drawCenteredString(mc.font, styleText, camBtnX + camBtnW / 2, camBtnY + 6, 0xFFFFFF);
 
         double guiMouseX = mc.mouseHandler.xpos() * width  / mc.getWindow().getScreenWidth();
         double guiMouseY = mc.mouseHandler.ypos() * height / mc.getWindow().getScreenHeight();
@@ -193,17 +242,26 @@ public class RTSInputHandler {
         Minecraft mc = Minecraft.getInstance();
         RTSSelectionManager manager = RTSSelectionManager.get();
 
-        // 检查是否点击了 Exit 按钮
         if (event.getButton() == GLFW.GLFW_MOUSE_BUTTON_LEFT && event.getAction() == GLFW.GLFW_PRESS) {
             double mx = mc.mouseHandler.xpos() * mc.getWindow().getGuiScaledWidth()  / mc.getWindow().getScreenWidth();
             double my = mc.mouseHandler.ypos() * mc.getWindow().getGuiScaledHeight() / mc.getWindow().getScreenHeight();
             int width = mc.getWindow().getGuiScaledWidth();
-            int btnW = 80, btnH = 20;
-            int btnX = width / 2 - btnW / 2, btnY = 10;
+            int height = mc.getWindow().getGuiScaledHeight();
+
+            // 检查是否点击了 Exit 按钮
+            int btnW = 80, btnH = 20, btnX = width / 2 - btnW / 2, btnY = 10;
             if (mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH) {
                 RTSCameraManager.get().toggleRTSMode();
                 manager.clearSelection();
                 syncSelectionToServer();
+                event.setCanceled(true);
+                return;
+            }
+
+            // 检查是否点击了切换相机风格按钮
+            int camBtnW = 90, camBtnH = 20, camBtnX = 10, camBtnY = height - camBtnH - 10;
+            if (mx >= camBtnX && mx <= camBtnX + camBtnW && my >= camBtnY && my <= camBtnY + camBtnH) {
+                RTSCameraManager.get().toggleCameraStyle();
                 event.setCanceled(true);
                 return;
             }
@@ -250,7 +308,8 @@ public class RTSInputHandler {
     }
 
     private static void updateHoveredEntity(Minecraft mc) {
-        HitResult hit = MouseRayCaster.pickFromMouse(mc.mouseHandler.xpos(), mc.mouseHandler.ypos(), 512.0);
+        // 由于相机拉升，扩大射线距离到 1024.0
+        HitResult hit = MouseRayCaster.pickFromMouse(mc.mouseHandler.xpos(), mc.mouseHandler.ypos(), 1024.0);
         if (hit.getType() == HitResult.Type.ENTITY) {
             RTSSelectionManager.get().setHoveredEntity(((EntityHitResult) hit).getEntity());
         } else {
@@ -266,11 +325,14 @@ public class RTSInputHandler {
         var rect = manager.getSelectionRect();
         Set<Integer> newSelection = new HashSet<>();
         Vec3 camPos = mc.gameRenderer.getMainCamera().getPosition();
-        final double MAX_VERT = 50.0, MAX_HORIZ = 128.0;
+
+        // 扩大框选判定范围以适应新视角高度
+        final double MAX_VERT = 250.0;
+        final double MAX_HORIZ = 256.0;
 
         if (rect.width() < 2 && rect.height() < 2) {
             // 点选
-            HitResult hit = MouseRayCaster.pickFromMouse(mc.mouseHandler.xpos(), mc.mouseHandler.ypos(), 256.0);
+            HitResult hit = MouseRayCaster.pickFromMouse(mc.mouseHandler.xpos(), mc.mouseHandler.ypos(), 1024.0);
             if (hit.getType() == HitResult.Type.ENTITY) {
                 Entity target = ((EntityHitResult) hit).getEntity();
                 if (isSelectableEntity(target, camPos, MAX_VERT, MAX_HORIZ)) {
@@ -361,7 +423,7 @@ public class RTSInputHandler {
         }
 
         // 指挥模式
-        HitResult hit = MouseRayCaster.pickFromMouse(mc.mouseHandler.xpos(), mc.mouseHandler.ypos(), 256.0);
+        HitResult hit = MouseRayCaster.pickFromMouse(mc.mouseHandler.xpos(), mc.mouseHandler.ypos(), 1024.0);
         if (hit.getType() == HitResult.Type.MISS) return;
 
         CommandType type;

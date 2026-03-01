@@ -41,7 +41,7 @@ public class ModKeyMappings {
     );
     public static final KeyMapping RTS_CAMERA_ROTATE = new KeyMapping(
             "key." + BetterMineTeam.MODID + ".rts_camera_rotate",
-            GLFW.GLFW_KEY_LEFT_ALT,
+            GLFW.GLFW_KEY_LEFT_CONTROL,
             "key.categories." + BetterMineTeam.MODID
     );
     @SubscribeEvent

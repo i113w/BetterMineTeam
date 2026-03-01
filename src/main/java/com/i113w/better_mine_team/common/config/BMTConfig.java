@@ -68,13 +68,12 @@ public class BMTConfig {
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> tamingMaterials;
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> blacklistedEntities;
 
-    private static final com.google.common.collect.BiMap<EntityType<?>, Ingredient> tamingMaterialMap = com.google.common.collect.HashBiMap.create();
-    private static Ingredient cachedDefaultIngredient = Ingredient.of(Items.GOLDEN_APPLE);
-    private static Ingredient cachedDragonIngredient = Ingredient.of(Items.GOLDEN_APPLE);
-    private static final Set<EntityType<?>> blacklistedCache = new HashSet<>();
-
-    private static final Set<EntityType<?>> teamMemberBlacklistCache = new HashSet<>();
-    private static final Set<EntityType<?>> entityDetailsBlacklistCache = new HashSet<>();
+    private static volatile com.google.common.collect.BiMap<EntityType<?>, Ingredient> tamingMaterialMap = com.google.common.collect.HashBiMap.create();
+    private static volatile Ingredient cachedDefaultIngredient = Ingredient.of(Items.GOLDEN_APPLE);
+    private static volatile Ingredient cachedDragonIngredient = Ingredient.of(Items.GOLDEN_APPLE);
+    private static volatile Set<EntityType<?>> blacklistedCache = new HashSet<>();
+    private static volatile Set<EntityType<?>> teamMemberBlacklistCache = new HashSet<>();
+    private static volatile Set<EntityType<?>> entityDetailsBlacklistCache = new HashSet<>();
 
     static {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
@@ -97,7 +96,7 @@ public class BMTConfig {
         guardFollowStartDist = builder.comment("Distance at which the entity starts following the captain.").defineInRange("guardFollowStartDist", 10.0, 5.0, 64.0);
         guardFollowStopDist = builder.comment("Distance at which the entity stops following the captain.").defineInRange("guardFollowStopDist", 2.0, 1.0, 16.0);
         followPathFailThreshold = builder.comment("How many failed pathfinding attempts before using direct movement. Lower values make mobs 'stuck' less often but might cause clipping through walls.").defineInRange("followPathFailThreshold", 5, 1, 20);
-        defaultFollowState = builder.comment("Whether mobs should default to 'Follow' mode when joining a team.").define("defaultFollowState", true);
+        defaultFollowState = builder.comment("Whether mobs should default to 'Follow' mode when joining a team.").define("defaultFollowState", false);
         enableFollowTeleport = builder.comment("Whether mobs should automatically teleport to the captain when too far away (like vanilla pets).").define("enableFollowTeleport", true);
         followTeleportDistance = builder.comment("The distance (in blocks) at which a mob will teleport to the captain.").defineInRange("followTeleportDistance", 24.0, 5.0, 128.0);
         builder.pop();
@@ -150,44 +149,83 @@ public class BMTConfig {
     }
 
     public static void loadTamingMaterials() {
+        // ── Step 1: 在方法入口处一次性读取所有 ConfigValue
+        // ConfigValue.get() 在 Forge 内部会调用 spec.correct()，可能在 config 尚未就绪
+        // 时返回 null 或抛出 NullPointerException，必须提前捕获。
+        List<? extends String> blacklistedRaw;
+        List<? extends String> teamMemberRaw;
+        List<? extends String> entityDetailsRaw;
+        List<? extends String> tamingMaterialsRaw;
+
+        try {
+            blacklistedRaw     = blacklistedEntities.get();
+            teamMemberRaw      = teamMemberListBlacklist.get();
+            entityDetailsRaw   = entityDetailsScreenBlacklist.get();
+            tamingMaterialsRaw = tamingMaterials.get();
+        } catch (NullPointerException e) {
+            BetterMineTeam.LOGGER.warn("[BMT] loadTamingMaterials: config spec 尚未就绪，本次跳过 ({})", e.getMessage());
+            return;
+        }
+
+        if (blacklistedRaw == null || teamMemberRaw == null || entityDetailsRaw == null || tamingMaterialsRaw == null) {
+            BetterMineTeam.LOGGER.warn("[BMT] loadTamingMaterials: 检测到 null 配置值，本次跳过");
+            return;
+        }
+
+        // ── Step 2: 加载材料（各自内部有独立的错误处理）
         loadDefaultMaterial();
         loadDragonMaterial();
 
-        blacklistedCache.clear();
-        for (String id : blacklistedEntities.get()) {
+        // ── Step 3: 在本地构建新的缓存对象（每次调用均独立，不共享可变状态）
+        Set<EntityType<?>> newBlacklisted = new HashSet<>();
+        for (String id : blacklistedRaw) {
             ResourceLocation rl = ResourceLocation.tryParse(id);
-            if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(blacklistedCache::add);
+            if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(newBlacklisted::add);
         }
 
-        teamMemberBlacklistCache.clear();
-        for (String id : teamMemberListBlacklist.get()) {
+        Set<EntityType<?>> newTeamMemberCache = new HashSet<>();
+        for (String id : teamMemberRaw) {
             ResourceLocation rl = ResourceLocation.tryParse(id);
-            if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(teamMemberBlacklistCache::add);
+            if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(newTeamMemberCache::add);
         }
 
-        entityDetailsBlacklistCache.clear();
-        for (String id : entityDetailsScreenBlacklist.get()) {
+        Set<EntityType<?>> newEntityDetailsCache = new HashSet<>();
+        for (String id : entityDetailsRaw) {
             ResourceLocation rl = ResourceLocation.tryParse(id);
-            if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(entityDetailsBlacklistCache::add);
+            if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(newEntityDetailsCache::add);
         }
 
-        tamingMaterialMap.clear();
-        for (String entry : tamingMaterials.get()) {
+        com.google.common.collect.BiMap<EntityType<?>, Ingredient> newTamingMap =
+                com.google.common.collect.HashBiMap.create();
+        for (String entry : tamingMaterialsRaw) {
             try {
                 String[] split = entry.split("-", 2);
                 if (split.length != 2) continue;
                 ResourceLocation entityId = ResourceLocation.tryParse(split[0]);
                 if (entityId != null) {
-                    BuiltInRegistries.ENTITY_TYPE.getOptional(entityId).ifPresentOrElse(entityType -> {
-                        try {
-                            JsonElement jsonElement = JsonParser.parseString(split[1]);
-                            tamingMaterialMap.put(entityType, Ingredient.fromJson(jsonElement));
-                        } catch (Exception e) { BetterMineTeam.LOGGER.error("JSON syntax error for {}: {}", entityId, e.getMessage()); }
-                    }, () -> BetterMineTeam.LOGGER.warn("Entity type not found: {}", entityId));
+                    BuiltInRegistries.ENTITY_TYPE.getOptional(entityId).ifPresentOrElse(
+                            entityType -> {
+                                try {
+                                    JsonElement jsonElement = JsonParser.parseString(split[1]);
+                                    newTamingMap.put(entityType, Ingredient.fromJson(jsonElement));
+                                } catch (Exception e) {
+                                    BetterMineTeam.LOGGER.error("JSON syntax error for {}: {}", entityId, e.getMessage());
+                                }
+                            },
+                            () -> BetterMineTeam.LOGGER.warn("Entity type not found: {}", entityId)
+                    );
                 }
             } catch (Exception ignored) {}
         }
+
+        // ── Step 4: 原子替换引用（Java 的 volatile 引用赋值是原子操作）─────────
+        // 读取方永远只能看到"完整的旧缓存"或"完整的新缓存"，不会看到半构建状态。
+        blacklistedCache         = newBlacklisted;
+        teamMemberBlacklistCache = newTeamMemberCache;
+        entityDetailsBlacklistCache = newEntityDetailsCache;
+        tamingMaterialMap        = newTamingMap;
     }
+
 
     private static void loadDefaultMaterial() { cachedDefaultIngredient = parseIngredientString(defaultTamingMaterial.get(), Items.GOLDEN_APPLE); }
     private static void loadDragonMaterial() { cachedDragonIngredient = parseIngredientString(dragonTamingMaterial.get(), Items.GOLDEN_APPLE); }
@@ -253,5 +291,15 @@ public class BMTConfig {
     public static boolean isSummonBlacklisted(net.minecraft.world.entity.EntityType<?> type) {
         String key = net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getKey(type).toString();
         return SUMMON_BLACKLIST.get().contains(key);
+    }
+    // 数据快照（prepare → apply 的载体）
+    public record BlacklistSnapshot(
+            Set<EntityType<?>> teamMemberBlacklist,
+            Set<EntityType<?>> entityDetailsBlacklist) {}
+
+    // 由 apply() 在主线程调用，原子替换两个 volatile 引用
+    public static void applyBlacklistSnapshot(BlacklistSnapshot snapshot) {
+        teamMemberBlacklistCache    = snapshot.teamMemberBlacklist();
+        entityDetailsBlacklistCache = snapshot.entityDetailsBlacklist();
     }
 }
