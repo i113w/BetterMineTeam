@@ -10,6 +10,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.ImageButton;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.player.LocalPlayer;
@@ -104,7 +105,7 @@ public class TeamRender {
     }
 
     private void initSmallIcons(int guiLeft, int guiTop) {
-        List<String> teamColors = Arrays.stream(DyeColor.values())
+        List<String> teamColors = Arrays.stream(TeamManager.ORIGINAL_DYE_COLORS)
                 .map(DyeColor::getName)
                 .collect(java.util.stream.Collectors.toList());
         java.util.Collections.reverse(teamColors);

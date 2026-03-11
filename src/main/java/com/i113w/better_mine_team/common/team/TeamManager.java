@@ -17,6 +17,41 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class TeamManager {
 
+    // ===== 原版 16 色常量 =====
+    public static final DyeColor[] ORIGINAL_DYE_COLORS = {
+            DyeColor.WHITE,
+            DyeColor.ORANGE,
+            DyeColor.MAGENTA,
+            DyeColor.LIGHT_BLUE,
+            DyeColor.YELLOW,
+            DyeColor.LIME,
+            DyeColor.PINK,
+            DyeColor.GRAY,
+            DyeColor.LIGHT_GRAY,
+            DyeColor.CYAN,
+            DyeColor.PURPLE,
+            DyeColor.BLUE,
+            DyeColor.BROWN,
+            DyeColor.GREEN,
+            DyeColor.RED,
+            DyeColor.BLACK
+    };
+
+    // 辅助方法：检查是否为原版颜色
+    public static boolean isOriginalDyeColor(DyeColor color) {
+        return color != null && color.getId() >= 0 && color.getId() <= 15;
+    }
+
+    // 辅助方法：安全获取原版颜色（防止新颜色导致问题）
+    public static DyeColor getOriginalColorByName(String name, DyeColor fallback) {
+        for (DyeColor color : ORIGINAL_DYE_COLORS) {
+            if (color.getName().equals(name)) {
+                return color;
+            }
+        }
+        return fallback;
+    }
+
     public static final String TEAM_PREFIX = BetterMineTeam.MODID + "_";
     private static final int MAX_THREATS_PER_TEAM = 20;
 
@@ -38,7 +73,8 @@ public class TeamManager {
      */
     public static void initTeams(MinecraftServer server) {
         Scoreboard scoreboard = server.getScoreboard();
-        for (DyeColor color : DyeColor.values()) {
+        // ===== 只遍历原版 16 色 =====
+        for (DyeColor color : ORIGINAL_DYE_COLORS) {
             String teamName = getTeamName(color);
             PlayerTeam playerTeam = scoreboard.getPlayerTeam(teamName);
             if (playerTeam == null) {
@@ -49,7 +85,6 @@ public class TeamManager {
             if (formatting != null) {
                 playerTeam.setColor(formatting);
             }
-            // 默认设置：禁止友伤，允许看到隐身队友
             if (playerTeam.getCollisionRule() == net.minecraft.world.scores.Team.CollisionRule.ALWAYS) {
                 playerTeam.setAllowFriendlyFire(false);
                 playerTeam.setSeeFriendlyInvisibles(true);
@@ -253,6 +288,25 @@ public class TeamManager {
             case BLACK -> ChatFormatting.BLACK;
         };
     }
+    private static final DyeColor[] ORIGINAL_COLORS = {
+            DyeColor.WHITE,
+            DyeColor.ORANGE,
+            DyeColor.MAGENTA,
+            DyeColor.LIGHT_BLUE,
+            DyeColor.YELLOW,
+            DyeColor.LIME,
+            DyeColor.PINK,
+            DyeColor.GRAY,
+            DyeColor.LIGHT_GRAY,
+            DyeColor.CYAN,
+            DyeColor.PURPLE,
+            DyeColor.BLUE,
+            DyeColor.BROWN,
+            DyeColor.GREEN,
+            DyeColor.RED,
+            DyeColor.BLACK
+    };
+
 
     public static String getTeamName(DyeColor color) {
         return TEAM_PREFIX + color.getName();

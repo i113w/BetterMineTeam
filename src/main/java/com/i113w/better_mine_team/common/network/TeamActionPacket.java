@@ -58,7 +58,7 @@ public class TeamActionPacket {
 
             // Action 0: 切换队伍
             if (msg.action == 0) {
-                DyeColor color = DyeColor.byName(msg.data, null);
+                DyeColor color = TeamManager.getOriginalColorByName(msg.data, null);
 
                 if (color != null) {
                     String newTeamName = TeamManager.getTeamName(color);
