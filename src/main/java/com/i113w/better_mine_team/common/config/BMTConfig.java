@@ -41,6 +41,9 @@ public class BMTConfig {
     private static final ModConfigSpec.BooleanValue defaultFollowEnabled;
     private static final ModConfigSpec.BooleanValue enableAutoTeleport;
     private static final ModConfigSpec.DoubleValue autoTeleportDistance;
+    private static final ModConfigSpec.IntValue attackCommitmentHardTicks;
+    private static final ModConfigSpec.IntValue attackCommitmentSoftTicks;
+    private static final ModConfigSpec.DoubleValue attackCommitmentSwitchRatio;
 
     private static final ModConfigSpec.DoubleValue guardFollowRange;
     private static final ModConfigSpec.DoubleValue warPropagationRange;
@@ -166,6 +169,29 @@ public class BMTConfig {
                 .comment("How many failed pathfinding attempts before using direct movement.")
                 .comment("Lower values make mobs 'stuck' less often but might cause clipping through walls.")
                 .defineInRange("followPathFailThreshold", 5, 1, 20);
+
+        attackCommitmentHardTicks = builder
+                .comment("Duration (in ticks) of the HARD commitment phase after a mob locks onto a target.")
+                .comment("During this window the mob will absolutely refuse to switch targets, even to a closer one.")
+                .comment("Set to 0 to disable hard locking entirely.")
+                .comment("Default: 20 ticks (1 second)")
+                .defineInRange("attackCommitmentHardTicks", 20, 0, 200);
+
+        attackCommitmentSoftTicks = builder
+                .comment("Total duration (in ticks) of the full commitment window (hard phase + soft phase combined).")
+                .comment("After the hard phase ends the mob enters a soft phase: it will only switch if the new target")
+                .comment("is significantly closer (see attackCommitmentSwitchRatio).")
+                .comment("Must be >= attackCommitmentHardTicks. Set to 0 to disable commitment entirely.")
+                .comment("Default: 60 ticks (3 seconds)")
+                .defineInRange("attackCommitmentSoftTicks", 60, 0, 400);
+
+        attackCommitmentSwitchRatio = builder
+                .comment("During the soft commitment phase, a new target must be within this fraction of the current")
+                .comment("target's distance (squared) before the mob will switch.")
+                .comment("Example: 0.5 means the new target must be at most 50% as far away as the current target.")
+                .comment("Lower values make mobs harder to divert. Range: 0.1 (very sticky) to 1.0 (easy to divert).")
+                .comment("Default: 0.5")
+                .defineInRange("attackCommitmentSwitchRatio", 0.5, 0.1, 1.0);
 
         rtsMovementSpeed = builder
                 .comment("Movement speed multiplier for RTS-controlled units.")
@@ -343,4 +369,7 @@ public class BMTConfig {
     public static int getFollowPathFailThreshold() { return followPathFailThreshold.get(); }
     public static boolean isMobTamingEnabled() { return enableMobTaming.get(); }
     public static boolean isShowInventoryTeamButtons() { return showInventoryTeamButtons.get(); }
+    public static int getAttackCommitmentHardTicks()   { return attackCommitmentHardTicks.get(); }
+    public static int getAttackCommitmentSoftTicks()    { return attackCommitmentSoftTicks.get(); }
+    public static double getAttackCommitmentSwitchRatio() { return attackCommitmentSwitchRatio.get(); }
 }

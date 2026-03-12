@@ -13,7 +13,6 @@ public enum MTGuiIcons {
     BUTTON_DISABLED(63, 0, 20, 20),
 
     // --- 1. 功能图标 (16x16) ---
-    // 移除了 TELEPORT 和 RENAME，更新了坐标映射
     ICON_INVENTORY(0, 21, 16, 16),
     ICON_FOLLOW_OFF(17, 21, 16, 16),
     ICON_FOLLOW_ON(34, 21, 16, 16),
@@ -21,6 +20,9 @@ public enum MTGuiIcons {
     ICON_CAPTAIN(68, 21, 16, 16),
     ICON_RTS(85, 21, 16, 16),
     ICON_LOCKED_INVENTORY(102, 21, 16, 16),
+    ICON_LEVEL_0(119, 21, 16, 16), // 被动 (Passive)
+    ICON_LEVEL_1(136, 21, 16, 16), // 警戒 (Guard)
+    ICON_LEVEL_2(153, 21, 16, 16), // 侵略 (Aggressive)
 
     // --- 2. 滚动条组件 ---
     SCROLL_TRACK(0, 40, 12, 152),
@@ -45,8 +47,7 @@ public enum MTGuiIcons {
         gfx.blit(TEXTURE, x, y, u, v, width, height);
     }
 
-    // 2. [补回] 自定义高度渲染 (用于滚动条 TeamMemberList)
-    // 参数: gfx, x, y, customHeight
+    // 2. 自定义高度渲染 (用于滚动条 TeamMemberList)
     public void render(GuiGraphics gfx, int x, int y, int customHeight) {
         // 保持宽度不变(this.width)，高度使用 customHeight
         // 采样时依然采样完整的原始高度(this.height)，让 OpenGL 处理拉伸
