@@ -2,6 +2,9 @@ package com.i113w.better_mine_team.common.network.handler;
 
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.config.BMTConfig;
+import com.i113w.better_mine_team.common.entity.goal.AggressiveScanGoal;
+import com.i113w.better_mine_team.common.entity.goal.TeamFollowCaptainGoal;
+import com.i113w.better_mine_team.common.entity.goal.TeamHurtByTargetGoal;
 import com.i113w.better_mine_team.common.network.rts.C2S_IssueCommandPayload;
 import com.i113w.better_mine_team.common.network.rts.C2S_SelectionSyncPayload;
 import com.i113w.better_mine_team.common.network.rts.S2C_CommandAckPayload;
@@ -15,6 +18,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.PlayerTeam;
@@ -78,51 +83,63 @@ public class ServerPacketHandler {
 
             for (int id : selectedIds) {
                 Entity entity = level.getEntity(id);
+                if (entity == null || !(entity instanceof Mob mob) || !mob.isAlive()) continue;
 
-                if (entity == null) {
-                    continue;
-                }
-
-                if (!(entity instanceof Mob mob)) {
-                    continue;
-                }
-
-                if (!mob.isAlive()) {
-                    continue;
-                }
-
-                // [修复] 严格的权限校验
                 if (isValidController(player, playerTeam, mob, payload.commandType())) {
                     validUnits.add(mob);
                 } else {
-                    BetterMineTeam.debug("[RTS-SERVER] ❌ Permission denied or invalid state for entity {}", id);
+                    BetterMineTeam.debug("[RTS-SERVER] ❌ Permission denied for entity {}", id);
                 }
             }
 
             int successCount = validUnits.size();
-            BetterMineTeam.debug("[RTS-SERVER] Valid units count: {}/{}", successCount, selectedIds.size());
+            BetterMineTeam.debug("[RTS-SERVER] Valid units: {}/{}", successCount, selectedIds.size());
 
             if (successCount == 0) {
-                sendAck(player, false, 0, Component.translatable("better_mine_team.msg.cmd_no_units").withStyle(ChatFormatting.RED));
+                sendAck(player, false, 0,
+                        Component.translatable("better_mine_team.msg.cmd_no_units").withStyle(ChatFormatting.RED));
                 return;
             }
 
             // 执行指令
             switch (payload.commandType()) {
-                case MOVE -> executeMoveCommand(validUnits, payload.target().pos());
-                case ATTACK -> executeAttackCommand(validUnits, level, payload.target().targetEntityId(), payload.secondaryTargetIds());
-                case STOP -> executeStopCommand(validUnits);
+                case MOVE    -> executeMoveCommand(validUnits, payload.target().pos());
+                case ATTACK  -> executeAttackCommand(validUnits, level, payload.target().targetEntityId(), payload.secondaryTargetIds());
+                case STOP    -> executeStopCommand(validUnits);
                 case RECRUIT -> executeRecruitCommand(player, validUnits);
             }
 
-            BetterMineTeam.debug("[RTS-SERVER] ✅ Command executed successfully");
-
-            sendAck(player, true, successCount, Component.translatable("better_mine_team.msg.cmd_ack", successCount).withStyle(ChatFormatting.GREEN));
+            BetterMineTeam.debug("[RTS-SERVER] ✅ Command executed");
+            sendAck(player, true, successCount,
+                    Component.translatable("better_mine_team.msg.cmd_ack", successCount).withStyle(ChatFormatting.GREEN));
         });
     }
 
-    private static void executeAttackCommand(List<Mob> units, Level level, int primaryTargetId, List<Integer> secondaryTargetIds) {
-        // 1. 收集所有目标 (主 + 副)
+    // ── Command executors ────────────────────────────────────────────────────
+
+    private static void executeMoveCommand(List<Mob> units, Vec3 centerTarget) {
+        int count = units.size();
+        BetterMineTeam.debug("[RTS-MOVE-CMD] {} units → {}", count, centerTarget);
+        if (count == 0) return;
+
+        if (count == 1) {
+            RTSUnitAIController.setMoveTarget(units.get(0), centerTarget);
+            return;
+        }
+
+        int cols = (int) Math.ceil(Math.sqrt(count));
+        double spacing = 2.0;
+        for (int i = 0; i < count; i++) {
+            int row = i / cols;
+            int col = i % cols;
+            double offsetX = (col - (cols - 1) / 2.0) * spacing;
+            double offsetZ = (row - (cols - 1) / 2.0) * spacing;
+            RTSUnitAIController.setMoveTarget(units.get(i), centerTarget.add(offsetX, 0, offsetZ));
+        }
+    }
+
+    private static void executeAttackCommand(List<Mob> units, Level level,
+                                             int primaryTargetId, List<Integer> secondaryTargetIds) {
         List<Entity> allTargets = new ArrayList<>();
         Entity primaryTarget = level.getEntity(primaryTargetId);
         if (primaryTarget != null) allTargets.add(primaryTarget);
@@ -143,8 +160,7 @@ public class ServerPacketHandler {
 
             for (Entity target : allTargets) {
                 if (!(target instanceof LivingEntity livingTarget)) continue;
-                if (TeamManager.isAlly(unit, livingTarget)) continue; // 不打自己人
-
+                if (TeamManager.isAlly(unit, livingTarget)) continue;
                 PlayerTeam targetTeam = TeamManager.getTeam(target);
 
                 if (targetTeam != null) {
@@ -161,107 +177,41 @@ public class ServerPacketHandler {
         // [修复] 增加类型检查，确保攻击目标是 LivingEntity
         if (primaryTarget instanceof LivingEntity livingPrimary) {
             for (Mob unit : units) {
-                if (unit == livingPrimary) continue;
-                if (TeamManager.isAlly(unit, livingPrimary)) continue;
-
+                if (unit == livingPrimary || TeamManager.isAlly(unit, livingPrimary)) continue;
                 RTSUnitAIController.setAttackTarget(unit, livingPrimary);
             }
         } else if (!allTargets.isEmpty()) {
-            // 如果主目标无效，寻找第一个有效的 LivingEntity
-            LivingEntity fallbackTarget = null;
+            LivingEntity fallback = null;
             for (Entity e : allTargets) {
-                if (e instanceof LivingEntity le && le.isAlive()) {
-                    fallbackTarget = le;
-                    break;
-                }
+                if (e instanceof LivingEntity le && le.isAlive()) { fallback = le; break; }
             }
-
-            if (fallbackTarget != null) {
+            if (fallback != null) {
                 for (Mob unit : units) {
-                    if (!TeamManager.isAlly(unit, fallbackTarget)) {
-                        RTSUnitAIController.setAttackTarget(unit, fallbackTarget);
+                    if (!TeamManager.isAlly(unit, fallback)) {
+                        RTSUnitAIController.setAttackTarget(unit, fallback);
                     }
                 }
             }
         }
     }
 
-    // [修复] 增强的权限校验逻辑
-    private static boolean isValidController(ServerPlayer player, PlayerTeam playerTeam, Mob mob, com.i113w.better_mine_team.common.network.data.CommandType commandType) {
-        // 1. 维度检查
-        if (player.level() != mob.level()) return false;
-
-        // 2. 区块加载检查 (防止操作卸载区块实体)
-        if (!mob.level().isLoaded(mob.blockPosition())) return false;
-
-        // 3. 距离检查 (防作弊/防误操作)
-        if (player.distanceToSqr(mob) > MAX_CONTROL_DISTANCE_SQR) return false;
-
-        if (commandType == com.i113w.better_mine_team.common.network.data.CommandType.RECRUIT) {
-            if (com.i113w.better_mine_team.common.team.TeamPermissions.hasOverridePermission(player)) {
-                // 允许操作无队伍生物
-                return TeamManager.getTeam(mob) == null;
-            }
-            return false;
-        }
-
-        // 4. 所有权/队伍检查
-        boolean hasPermission = false;
-        PlayerTeam mobTeam = TeamManager.getTeam(mob);
-        if (playerTeam != null && mobTeam != null && playerTeam.getName().equals(mobTeam.getName())) {
-            hasPermission = true;
-        } else if (mob instanceof net.minecraft.world.entity.TamableAnimal tamable) {
-            if (tamable.isOwnedBy(player)) {
-                hasPermission = true;
-            }
-        }
-        return hasPermission;
-    }
-
-    private static void executeMoveCommand(List<Mob> units, Vec3 centerTarget) {
-        int count = units.size();
-        BetterMineTeam.debug("[RTS-MOVE-CMD] Executing for {} units to {}", count, centerTarget);
-
-        if (count == 0) return;
-
-        if (count == 1) {
-            RTSUnitAIController.setMoveTarget(units.get(0), centerTarget);
-            return;
-        }
-
-        // 简单的网格阵型
-        int cols = (int) Math.ceil(Math.sqrt(count));
-        double spacing = 2.0;
-
-        for (int i = 0; i < count; i++) {
-            Mob unit = units.get(i);
-            int row = i / cols;
-            int col = i % cols;
-
-            double offsetX = (col - (cols - 1) / 2.0) * spacing;
-            double offsetZ = (row - (cols - 1) / 2.0) * spacing;
-
-            Vec3 unitTarget = centerTarget.add(offsetX, 0, offsetZ);
-            RTSUnitAIController.setMoveTarget(unit, unitTarget);
-        }
-    }
-
     private static void executeStopCommand(List<Mob> units) {
-        BetterMineTeam.debug("[RTS-STOP-CMD] Executing for {} units", units.size());
-        for (Mob unit : units) {
-            RTSUnitAIController.stop(unit);
-        }
+        BetterMineTeam.debug("[RTS-STOP-CMD] {} units", units.size());
+        for (Mob unit : units) RTSUnitAIController.stop(unit);
     }
+
     private static void executeRecruitCommand(ServerPlayer player, List<Mob> units) {
-        // 1. 二次权限检查 (以防万一)
         if (!com.i113w.better_mine_team.common.team.TeamPermissions.hasOverridePermission(player)) {
-            player.displayClientMessage(Component.translatable("better_mine_team.msg.permission_denied").withStyle(ChatFormatting.RED), true);
+            player.displayClientMessage(
+                    Component.translatable("better_mine_team.msg.permission_denied").withStyle(ChatFormatting.RED), true);
             return;
         }
 
         PlayerTeam playerTeam = TeamManager.getTeam(player);
         if (playerTeam == null) {
-            player.displayClientMessage(Component.translatable("message.better_mine_team.error.no_team_specified", player.getName()).withStyle(ChatFormatting.RED), true);
+            player.displayClientMessage(
+                    Component.translatable("message.better_mine_team.error.no_team_specified", player.getName())
+                            .withStyle(ChatFormatting.RED), true);
             return;
         }
 
@@ -269,36 +219,32 @@ public class ServerPacketHandler {
         net.minecraft.world.scores.Scoreboard scoreboard = player.getScoreboard();
 
         for (Mob mob : units) {
-            // 2. 检查生物是否已有队伍
-            PlayerTeam mobTeam = TeamManager.getTeam(mob);
-            if (mobTeam != null) continue;
+            if (TeamManager.getTeam(mob) != null) continue; // 已有队伍，跳过
 
-            // 3. 核心入队逻辑 (参考 MobTeamEventSubscriber)
             scoreboard.addPlayerToTeam(mob.getStringUUID(), playerTeam);
 
-            // 4. 设置属性
-            var followAttribute = mob.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.FOLLOW_RANGE);
+            var followAttribute = mob.getAttribute(Attributes.FOLLOW_RANGE);
             if (followAttribute != null) {
                 double newRange = BMTConfig.getGuardFollowRange();
-                if (followAttribute.getBaseValue() < newRange) {
-                    followAttribute.setBaseValue(newRange);
-                }
+                if (followAttribute.getBaseValue() < newRange) followAttribute.setBaseValue(newRange);
             }
 
             mob.setHealth(mob.getMaxHealth());
-
-            // 使用 Config 设定的默认值
             mob.getPersistentData().putBoolean("bmt_follow_enabled", BMTConfig.isDefaultFollowEnabled());
             mob.setPersistenceRequired();
 
-            // 5. 添加 AI 目标
-            mob.targetSelector.addGoal(1, new com.i113w.better_mine_team.common.entity.goal.TeamHurtByTargetGoal(mob));
-            mob.goalSelector.addGoal(2, new com.i113w.better_mine_team.common.entity.goal.TeamFollowCaptainGoal(mob,
+            // 注入队伍 AI Goal
+            mob.targetSelector.addGoal(1, new TeamHurtByTargetGoal(mob));
+            mob.goalSelector.addGoal(2, new TeamFollowCaptainGoal(mob,
                     BMTConfig.getGuardFollowSpeed(),
                     BMTConfig.getGuardFollowStartDist(),
                     BMTConfig.getGuardFollowStopDist()));
 
-            // 6. 发光特效
+            // AggressiveScanGoal 仅适用于 PathfinderMob（安全强转保护）
+            if (mob instanceof PathfinderMob pathfinderMob) {
+                pathfinderMob.targetSelector.addGoal(2, new AggressiveScanGoal(pathfinderMob));
+            }
+
             mob.setGlowingTag(true);
 
             // 7. 特效反馈 (可选：播放声音或粒子)
@@ -308,11 +254,37 @@ public class ServerPacketHandler {
         }
 
         if (successCount > 0) {
-            player.displayClientMessage(Component.translatable("better_mine_team.msg.recruit_success", successCount).withStyle(ChatFormatting.GREEN), true);
+            player.displayClientMessage(
+                    Component.translatable("better_mine_team.msg.recruit_success", successCount)
+                            .withStyle(ChatFormatting.GREEN), true);
         } else {
-            player.displayClientMessage(Component.translatable("better_mine_team.msg.recruit_fail_no_target").withStyle(ChatFormatting.YELLOW), true);
+            player.displayClientMessage(
+                    Component.translatable("better_mine_team.msg.recruit_fail_no_target")
+                            .withStyle(ChatFormatting.YELLOW), true);
         }
     }
+
+    // ── Validation ───────────────────────────────────────────────────────────
+
+    private static boolean isValidController(ServerPlayer player, PlayerTeam playerTeam,
+                                             Mob mob,
+                                             com.i113w.better_mine_team.common.network.data.CommandType commandType) {
+        if (player.level() != mob.level()) return false;
+        if (!mob.level().isLoaded(mob.blockPosition())) return false;
+        if (player.distanceToSqr(mob) > MAX_CONTROL_DISTANCE_SQR) return false;
+
+        if (commandType == com.i113w.better_mine_team.common.network.data.CommandType.RECRUIT) {
+            return com.i113w.better_mine_team.common.team.TeamPermissions.hasOverridePermission(player)
+                    && TeamManager.getTeam(mob) == null;
+        }
+
+        PlayerTeam mobTeam = TeamManager.getTeam(mob);
+        if (playerTeam != null && mobTeam != null && playerTeam.getName().equals(mobTeam.getName())) return true;
+        if (mob instanceof net.minecraft.world.entity.TamableAnimal tamable && tamable.isOwnedBy(player)) return true;
+        return false;
+    }
+
+    // ── Ack ──────────────────────────────────────────────────────────────────
 
     private static void sendAck(ServerPlayer player, boolean success, int count, Component msg) {
         PacketDistributor.sendToPlayer(player, new S2C_CommandAckPayload(success, count, msg));

@@ -5,6 +5,7 @@ import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.registry.ModMenuTypes;
 import com.i113w.better_mine_team.common.team.TeamPermissions;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -14,6 +15,7 @@ import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.capabilities.Capabilities;
@@ -37,14 +39,13 @@ public class EntityDetailsMenu extends AbstractContainerMenu {
 
         if (entity == null) return;
 
-        // === 1. 左侧面板：通用装备栏 (所有生物都有) ===
-        // 直接操作实体装备槽，不依赖 Capability，确保能给村民穿装备
-        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.HEAD, 61, 18));
-        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.CHEST, 61, 36));
-        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.LEGS, 61, 54));
-        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.FEET, 61, 72));
-        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.MAINHAND, 8, 94));
-        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.OFFHAND, 26, 94));
+        // === 1. 左侧面板：通用装备栏 (带有原版空占位符) ===
+        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.HEAD, 61, 18, ResourceLocation.withDefaultNamespace("item/empty_armor_slot_helmet")));
+        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.CHEST, 61, 36, ResourceLocation.withDefaultNamespace("item/empty_armor_slot_chestplate")));
+        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.LEGS, 61, 54, ResourceLocation.withDefaultNamespace("item/empty_armor_slot_leggings")));
+        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.FEET, 61, 72, ResourceLocation.withDefaultNamespace("item/empty_armor_slot_boots")));
+        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.MAINHAND, 8, 94, ResourceLocation.withDefaultNamespace("item/empty_slot_sword")));
+        addSlot(new EntityEquipmentSlot(targetEntity, EquipmentSlot.OFFHAND, 26, 94, ResourceLocation.withDefaultNamespace("item/empty_armor_slot_shield")));
 
         // === 2. 右侧面板：物品栏区域 ===
         int gridStartX = 85;
@@ -207,10 +208,14 @@ public class EntityDetailsMenu extends AbstractContainerMenu {
         private final LivingEntity entity;
         private final EquipmentSlot slot;
 
-        public EntityEquipmentSlot(LivingEntity entity, EquipmentSlot slot, int x, int y) {
+        public EntityEquipmentSlot(LivingEntity entity, EquipmentSlot slot, int x, int y, ResourceLocation emptyIcon) {
             super(new SimpleContainer(1), 0, x, y);
             this.entity = entity;
             this.slot = slot;
+            // 绑定原版图标占位符
+            if (emptyIcon != null) {
+                this.setBackground(InventoryMenu.BLOCK_ATLAS, emptyIcon);
+            }
         }
 
         @Override
@@ -225,9 +230,7 @@ public class EntityDetailsMenu extends AbstractContainerMenu {
         }
 
         @Override
-        public void setChanged() {
-            // 这里可以留空，因为 set 方法里直接操作了实体
-        }
+        public void setChanged() {}
 
         @Override
         public boolean mayPlace(@NotNull ItemStack stack) {
@@ -244,10 +247,7 @@ public class EntityDetailsMenu extends AbstractContainerMenu {
         @Override
         public @NotNull ItemStack remove(int amount) {
             ItemStack current = this.getItem();
-            if (current.isEmpty()) {
-                return ItemStack.EMPTY;
-            }
-            // 分离出被玩家拿走的数量
+            if (current.isEmpty()) return ItemStack.EMPTY;
             ItemStack split = current.split(amount);
             // 无论剩余多少（哪怕是空），都重新 set 回实体身上，触发原版数据同步
             this.set(current);

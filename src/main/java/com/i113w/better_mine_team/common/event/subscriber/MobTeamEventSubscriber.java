@@ -4,6 +4,8 @@ import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.compat.LoadedCompat;
 import com.i113w.better_mine_team.common.compat.irons_spellbooks.IronsSpellbooksCompat;
 import com.i113w.better_mine_team.common.config.BMTConfig;
+import com.i113w.better_mine_team.common.entity.goal.AggressiveScanGoal;
+import com.i113w.better_mine_team.common.entity.goal.GoalSanitizer;
 import com.i113w.better_mine_team.common.entity.goal.TeamFollowCaptainGoal;
 import com.i113w.better_mine_team.common.entity.goal.TeamHurtByTargetGoal;
 import com.i113w.better_mine_team.common.team.TeamManager;
@@ -22,16 +24,50 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
+import net.neoforged.neoforge.event.entity.living.LivingChangeTargetEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import org.jetbrains.annotations.Nullable;
 
 @EventBusSubscriber(modid = BetterMineTeam.MODID)
 public class MobTeamEventSubscriber {
+
+
+    public static void setupTeamAI(Mob mob) {
+        // 先清理非白名单的原版敌意目标
+        GoalSanitizer.sanitize(mob);
+
+        // 注入 TeamHurtByTargetGoal
+        boolean hasTeamHurt = mob.targetSelector.getAvailableGoals().stream()
+                .anyMatch(w -> w.getGoal() instanceof TeamHurtByTargetGoal);
+        if (!hasTeamHurt) {
+            mob.targetSelector.addGoal(1, new TeamHurtByTargetGoal(mob));
+        }
+
+        // 注入 TeamFollowCaptainGoal
+        boolean hasFollow = mob.goalSelector.getAvailableGoals().stream()
+                .anyMatch(w -> w.getGoal() instanceof TeamFollowCaptainGoal);
+        if (!hasFollow) {
+            mob.goalSelector.addGoal(2, new TeamFollowCaptainGoal(mob,
+                    BMTConfig.getGuardFollowSpeed(),
+                    BMTConfig.getGuardFollowStartDist(),
+                    BMTConfig.getGuardFollowStopDist()));
+        }
+
+        // 注入 AggressiveScanGoal
+        if (mob instanceof PathfinderMob pathfinderMob) {
+            boolean hasAggressive = pathfinderMob.targetSelector.getAvailableGoals().stream()
+                    .anyMatch(w -> w.getGoal() instanceof AggressiveScanGoal);
+            if (!hasAggressive) {
+                pathfinderMob.targetSelector.addGoal(2, new AggressiveScanGoal(pathfinderMob));
+            }
+        }
+    }
 
     @SubscribeEvent
     public static void onEntityJoinWorld(EntityJoinLevelEvent event) {
@@ -41,13 +77,48 @@ public class MobTeamEventSubscriber {
             handleSummonedEntityTeam(living, (ServerLevel) event.getLevel());
         }
 
+        // 取消了无差别注入，仅给已在队伍中的 Mob 注入队伍 AI
         if (event.getEntity() instanceof Mob mob) {
-            mob.targetSelector.addGoal(1, new TeamHurtByTargetGoal(mob));
-            mob.goalSelector.addGoal(2, new TeamFollowCaptainGoal(mob,
-                    BMTConfig.getGuardFollowSpeed(),
-                    BMTConfig.getGuardFollowStartDist(),
-                    BMTConfig.getGuardFollowStopDist()));
+            if (TeamManager.getTeam(mob) != null) {
+                setupTeamAI(mob);
+            }
         }
+    }
+
+    // [删除] 删除了存在极大冲突的 LOW 优先级 onEntityJoinLevelLate
+
+    @SubscribeEvent
+    public static void onLivingChangeTarget(LivingChangeTargetEvent event) {
+        if (!(event.getEntity().level() instanceof ServerLevel serverLevel)) return;
+
+        LivingEntity aggressor = event.getEntity();
+        // [修复] 适配 NeoForge 1.21.1，使用 getNewAboutToBeSetTarget() 替代过时的 getNewTarget()
+        LivingEntity newTarget  = event.getNewAboutToBeSetTarget();
+        if (newTarget == null) return;
+
+        // 攻击目标必须是队伍成员
+        PlayerTeam victimTeam = TeamManager.getTeam(newTarget);
+        if (victimTeam == null) return;
+
+        // 攻击者不能是同队友军
+        if (TeamManager.isAlly(aggressor, newTarget)) return;
+
+        // 在攻击者附近寻找同队 Level 1+ 的 PathfinderMob 守卫，唤醒其扫描计时器
+        double alertRadius = BMTConfig.getAggressiveScanRadius();
+        AABB alertBox = aggressor.getBoundingBox().inflate(alertRadius, 8.0, alertRadius);
+
+        serverLevel.getEntitiesOfClass(PathfinderMob.class, alertBox, guard -> {
+            if (!guard.isAlive()) return false;
+            PlayerTeam guardTeam = TeamManager.getTeam(guard);
+            if (guardTeam == null || !guardTeam.getName().equals(victimTeam.getName())) return false;
+            return TeamManager.getAggressiveLevel(guard) >= 1;
+        }).forEach(guard ->
+                guard.targetSelector.getAvailableGoals().forEach(wrapper -> {
+                    if (wrapper.getGoal() instanceof AggressiveScanGoal scanGoal) {
+                        scanGoal.resetScanTicker();
+                    }
+                })
+        );
     }
 
     private static void handleSummonedEntityTeam(LivingEntity summon, ServerLevel level) {
@@ -85,6 +156,10 @@ public class MobTeamEventSubscriber {
 
         // 应用 Config 中的 Follow 默认值
         summon.getPersistentData().putBoolean("bmt_follow_enabled", BMTConfig.isDefaultFollowEnabled());
+
+        if (summon instanceof Mob mob) {
+            setupTeamAI(mob);
+        }
 
         BetterMineTeam.debug("Summoned Entity {} auto-joined team {} (Owner: {})",
                 summon.getName().getString(), ownerTeam.getName(), owner.getName().getString());
@@ -178,14 +253,10 @@ public class MobTeamEventSubscriber {
 
                     if (livingEntity instanceof Mob mob) {
                         mob.setPersistenceRequired();
-                        mob.targetSelector.addGoal(1, new TeamHurtByTargetGoal(mob));
-                        mob.goalSelector.addGoal(2, new TeamFollowCaptainGoal(mob,
-                                BMTConfig.getGuardFollowSpeed(),
-                                BMTConfig.getGuardFollowStartDist(),
-                                BMTConfig.getGuardFollowStopDist()));
+                        setupTeamAI(mob); // 统一调用
                     }
-                    livingEntity.setGlowingTag(true);
 
+                    livingEntity.setGlowingTag(true);
                     event.setCanceled(true);
                     event.setCancellationResult(InteractionResult.SUCCESS);
                 }

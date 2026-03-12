@@ -3,7 +3,9 @@ package com.i113w.better_mine_team.common.team;
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.config.BMTConfig;
 import net.minecraft.ChatFormatting;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.DyeColor;
@@ -31,7 +33,7 @@ public class TeamManager {
 
     // Key: TeamName, Value: 上次全图扫描的 GameTime
     private static final Map<String, Long> teamScanCooldowns = new ConcurrentHashMap<>();
-
+    private static final ConcurrentHashMap<String, Long> aggressiveScanTimestamps = new ConcurrentHashMap<>();
     public static void initTeams(MinecraftServer server) {
         Scoreboard scoreboard = server.getScoreboard();
         for (DyeColor color : DyeColor.values()) {
@@ -56,6 +58,7 @@ public class TeamManager {
         teamThreats.clear();
         teamScanCooldowns.clear();
         BetterMineTeam.debug("TeamManager data cleared.");
+        aggressiveScanTimestamps.clear();
     }
 
     public static void addThreat(PlayerTeam team, LivingEntity target) {
@@ -232,6 +235,55 @@ public class TeamManager {
         PlayerTeam teamB = getTeam(b);
         if (teamA == null || teamB == null) return false;
         return teamA.getName().equals(teamB.getName()) || teamA.isAlliedTo(teamB);
+    }
+
+    /**
+     * Returns the aggressive level stored in the entity's PersistentData.
+     * Defaults to {@code BMTConfig.getDefaultAggressiveLevel()} if not set.
+     *
+     * @param entity the mob whose aggressive level to query
+     * @return 0 (Passive), 1 (Guard), or 2 (Aggressive)
+     */
+    public static int getAggressiveLevel(LivingEntity entity) {
+        CompoundTag data = entity.getPersistentData();
+        if (!data.contains("bmt_aggressive_level")) {
+            return BMTConfig.getDefaultAggressiveLevel();
+        }
+        return Mth.clamp(data.getInt("bmt_aggressive_level"), 0, 2);
+    }
+
+    /**
+     * Stores the aggressive level in the entity's PersistentData.
+     * The value is clamped to [0, 2].
+     *
+     * @param entity   the mob to update
+     * @param level    the new aggressive level (0–2)
+     */
+    public static void setAggressiveLevel(LivingEntity entity, int level) {
+        entity.getPersistentData().putInt("bmt_aggressive_level", Mth.clamp(level, 0, 2));
+    }
+
+
+    /**
+     * Returns {@code true} if the team has scanned recently enough that another
+     * AABB query would be redundant.
+     *
+     * @param team        the team to check
+     * @param currentTime {@code Level.getGameTime()} at the call site
+     */
+    public static boolean isAggressiveScanOnCooldown(PlayerTeam team, long currentTime) {
+        long lastScan = aggressiveScanTimestamps.getOrDefault(team.getName(), 0L);
+        return (currentTime - lastScan) < BMTConfig.getAggressiveScanTeamCooldown();
+    }
+
+    /**
+     * Records that this team just completed an aggressive scan.
+     *
+     * @param team        the team that scanned
+     * @param currentTime {@code Level.getGameTime()} at the call site
+     */
+    public static void markAggressiveScanDone(PlayerTeam team, long currentTime) {
+        aggressiveScanTimestamps.put(team.getName(), currentTime);
     }
 
     public static void cleanupExpiredHateData(MinecraftServer server) {

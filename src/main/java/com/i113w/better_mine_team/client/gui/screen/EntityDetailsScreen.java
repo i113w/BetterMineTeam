@@ -4,6 +4,7 @@ import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.client.gui.asset.MTGuiIcons;
 import com.i113w.better_mine_team.common.menu.EntityDetailsMenu;
 import com.i113w.better_mine_team.common.network.TeamManagementPayload;
+import com.i113w.better_mine_team.common.team.TeamManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -13,6 +14,7 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
@@ -43,6 +45,21 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
     private boolean isRenaming = false;
     private IconButton followButton;
 
+    // ── Aggressive level UI ──────────────────────────────────────────────────
+    /**
+     * Client-side cache of the target entity's aggressive level.
+     * Updated by the server via {@link TeamManagementPayload#ACTION_GET_AGGRESSIVE_LEVEL}.
+     */
+    private int currentAggressiveLevel = 0;
+
+    /**
+     * The three aggressive level buttons (Passive / Guard / Aggressive).
+     */
+    @Nullable private IconButton aggressiveBtn0; // Passive
+    @Nullable private IconButton aggressiveBtn1; // Guard
+    @Nullable private IconButton aggressiveBtn2; // Aggressive
+    // ─────────────────────────────────────────────────────────────────────────
+
     public EntityDetailsScreen(EntityDetailsMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);
         this.imageWidth = CONTENT_WIDTH;
@@ -59,7 +76,8 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         this.leftPos = (this.width - this.imageWidth) / 2;
         this.topPos = (this.height - this.imageHeight) / 2;
 
-        this.nameField = new EditBox(this.font, this.leftPos + 7, this.topPos + 115, 70, 12,
+        this.nameField = new EditBox(this.font,
+                this.leftPos + 7, this.topPos + 115, 70, 12,
                 Component.translatable("better_mine_team.gui.label.name"));
         this.nameField.setMaxLength(32);
         this.nameField.setBordered(true);
@@ -71,20 +89,22 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         int btnY = this.topPos + 130;
         int spacing = 22;
 
-        // 传送按钮
-        addItemButton(btnX, btnY, Items.ENDER_PEARL, (btn) -> {
+        // ── Row 1 ──
+        // 传送按钮：单独向左向上偏移 1px
+        IconButton teleportBtn = new IconButton(btnX, btnY, new ItemStack(Items.ENDER_PEARL), (btn) -> {
             sendAction(TeamManagementPayload.ACTION_TELEPORT, "");
-        }, "better_mine_team.gui.tooltip.teleport");
+        }, Component.translatable("better_mine_team.gui.tooltip.teleport"));
+        teleportBtn.setIconOffset(-1, 0);
+        this.addRenderableWidget(teleportBtn);
 
-        // 重命名按钮
+        // 重命名按钮 (Col 2)
         addItemButton(btnX + spacing, btnY, Items.NAME_TAG, (btn) -> {
             toggleRenameMode();
         }, "better_mine_team.gui.tooltip.rename");
 
-        // 跟随按钮
+        // 跟随按钮 (Col 3)
         this.followButton = new IconButton(
-                btnX,
-                btnY + spacing,
+                btnX + spacing * 2, btnY,
                 MTGuiIcons.ICON_FOLLOW_OFF,
                 (btn) -> {
                     sendAction(TeamManagementPayload.ACTION_TOGGLE_FOLLOW, "");
@@ -94,7 +114,37 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         this.addRenderableWidget(this.followButton);
         updateFollowButtonState();
 
+        // ── Row 2: Aggressive Levels (Level 0, Level 1, Level 2) ──
+        int aggrBtnY = btnY + spacing;
+
+        this.aggressiveBtn0 = new IconButton(
+                btnX, aggrBtnY, // Col 1
+                MTGuiIcons.ICON_LEVEL_0,
+                btn -> onAggressiveLevelChange(0),
+                Component.translatable("better_mine_team.gui.tooltip.aggressive.level0")
+        );
+        this.aggressiveBtn1 = new IconButton(
+                btnX + spacing, aggrBtnY, // Col 2
+                MTGuiIcons.ICON_LEVEL_1,
+                btn -> onAggressiveLevelChange(1),
+                Component.translatable("better_mine_team.gui.tooltip.aggressive.level1")
+        );
+        this.aggressiveBtn2 = new IconButton(
+                btnX + spacing * 2, aggrBtnY, // Col 3
+                MTGuiIcons.ICON_LEVEL_2,
+                btn -> onAggressiveLevelChange(2),
+                Component.translatable("better_mine_team.gui.tooltip.aggressive.level2")
+        );
+
+        this.addRenderableWidget(this.aggressiveBtn0);
+        this.addRenderableWidget(this.aggressiveBtn1);
+        this.addRenderableWidget(this.aggressiveBtn2);
+
+        // 向服务端请求当前 Aggressive 等级；服务端回包将调用 setAggressiveLevel()
+        sendAction(TeamManagementPayload.ACTION_GET_AGGRESSIVE_LEVEL, "");
     }
+
+    // ── Tick ─────────────────────────────────────────────────────────────────
 
     @Override
     public void containerTick() {
@@ -102,11 +152,43 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         updateFollowButtonState();
     }
 
+    // ── Follow helpers ────────────────────────────────────────────────────────
+
     private void updateFollowButtonState() {
-        if (this.menu.getTargetEntity() == null) return;
+        if (this.menu.getTargetEntity() == null || this.followButton == null) return;
         boolean isFollowing = this.menu.getTargetEntity().getPersistentData().getBoolean("bmt_follow_enabled");
         this.followButton.setIcon(isFollowing ? MTGuiIcons.ICON_FOLLOW_ON : MTGuiIcons.ICON_FOLLOW_OFF);
     }
+
+    // ── Aggressive level API (called from TeamManagementPayload.ClientHandler) ──
+
+    /**
+     * Updates the displayed aggressive level and refreshes button highlight states.
+     * Called from the client-side packet handler when the server responds to
+     * {@link TeamManagementPayload#ACTION_GET_AGGRESSIVE_LEVEL}.
+     *
+     * @param level 0 (Passive), 1 (Guard), 2 (Aggressive)
+     */
+    public void setAggressiveLevel(int level) {
+        this.currentAggressiveLevel = Mth.clamp(level, 0, 2);
+        refreshAggressiveButtonHighlights();
+    }
+
+    private void refreshAggressiveButtonHighlights() {
+        if (aggressiveBtn0 == null) return; // called before init()
+        aggressiveBtn0.setHighlighted(currentAggressiveLevel == 0);
+        aggressiveBtn1.setHighlighted(currentAggressiveLevel == 1);
+        aggressiveBtn2.setHighlighted(currentAggressiveLevel == 2);
+    }
+
+    private void onAggressiveLevelChange(int newLevel) {
+        if (newLevel == currentAggressiveLevel) return;
+        currentAggressiveLevel = newLevel;
+        refreshAggressiveButtonHighlights();
+        sendAction(TeamManagementPayload.ACTION_SET_AGGRESSIVE_LEVEL, String.valueOf(newLevel));
+    }
+
+    // ── Rename helpers ────────────────────────────────────────────────────────
 
     private void toggleRenameMode() {
         this.isRenaming = !this.isRenaming;
@@ -135,6 +217,9 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
                 data
         ));
     }
+
+    // ── Input ─────────────────────────────────────────────────────────────────
+
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (this.isRenaming) {
@@ -154,15 +239,11 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
-    // 辅助方法：添加基于图标的按钮
-    private void addIconButton(int x, int y, MTGuiIcons icon, Button.OnPress onPress, String tooltipKey) {
-        this.addRenderableWidget(new IconButton(x, y, icon, onPress, Component.translatable(tooltipKey)));
-    }
-
-    // 辅助方法：添加基于物品的按钮
     private void addItemButton(int x, int y, Item item, Button.OnPress onPress, String tooltipKey) {
         this.addRenderableWidget(new IconButton(x, y, new ItemStack(item), onPress, Component.translatable(tooltipKey)));
     }
+
+    // ── Render ────────────────────────────────────────────────────────────────
 
     @Override
     public void render(@NotNull GuiGraphics gfx, int mouseX, int mouseY, float partialTick) {
@@ -182,15 +263,7 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         LivingEntity entity = this.menu.getTargetEntity();
         if (entity != null) {
             float height = entity.getBbHeight();
-            int scale;
-            if (height < 0.9) {
-                scale = 45;
-            } else if (height > 2.2) {
-                scale = 18;
-            } else {
-                scale = 30;
-            }
-
+            int scale = height < 0.9 ? 45 : (height > 2.2 ? 18 : 30);
             int entityX = this.leftPos + 32;
             int entityY = this.topPos + 84;
 
@@ -198,11 +271,9 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
             gfx.pose().translate(0, 0, 50);
             RenderSystem.enableDepthTest();
 
-            renderEntityInInventoryFollowsMouse(gfx,
-                    entityX, entityY,
-                    scale,
-                    (float)entityX - this.xMouse,
-                    (float)(this.topPos + 40) - this.yMouse,
+            renderEntityInInventoryFollowsMouse(gfx, entityX, entityY, scale,
+                    (float) entityX - this.xMouse,
+                    (float) (this.topPos + 40) - this.yMouse,
                     entity);
 
             RenderSystem.disableDepthTest();
@@ -212,7 +283,7 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         for (Slot slot : this.menu.slots) {
             if (slot instanceof EntityDetailsMenu.DisabledSlot) {
                 int x = this.leftPos + slot.x;
-                int y = this.topPos + slot.y;
+                int y = this.topPos  + slot.y;
                 gfx.fill(x, y, x + 16, y + 16, 0x508B8B8B);
                 RenderSystem.enableBlend();
                 MTGuiIcons.ICON_LOCKED_INVENTORY.render(gfx, x, y);
@@ -222,59 +293,91 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
     }
 
     @SuppressWarnings("all")
-    private void renderEntityInInventoryFollowsMouse(GuiGraphics gfx, int x, int y, int scale, float mouseX, float mouseY, LivingEntity entity) {
-        float f = (float)Math.atan((double)(mouseX / 40.0F));
-        float f1 = (float)Math.atan((double)(mouseY / 40.0F));
-        Quaternionf quaternionf = (new Quaternionf()).rotateZ((float)Math.PI);
-        Quaternionf quaternionf1 = (new Quaternionf()).rotateX(f1 * 20.0F * ((float)Math.PI / 180F));
+    private void renderEntityInInventoryFollowsMouse(GuiGraphics gfx, int x, int y, int scale,
+                                                     float mouseX, float mouseY, LivingEntity entity) {
+        float f  = (float) Math.atan(mouseX / 40.0F);
+        float f1 = (float) Math.atan(mouseY / 40.0F);
+        Quaternionf quaternionf  = (new Quaternionf()).rotateZ((float) Math.PI);
+        Quaternionf quaternionf1 = (new Quaternionf()).rotateX(f1 * 20.0F * ((float) Math.PI / 180F));
         quaternionf.mul(quaternionf1);
+
         float yBodyRot = entity.yBodyRot;
         float yHeadRot = entity.yHeadRot;
-        float xRot = entity.getXRot();
-        float yRotO = entity.yRotO;
-        float xRotO = entity.xRotO;
+        float xRot     = entity.getXRot();
+        float yRotO    = entity.yRotO;
+        float xRotO    = entity.xRotO;
+
         entity.yBodyRot = 180.0F + f * 20.0F;
         entity.setYRot(180.0F + f * 40.0F);
         entity.setXRot(-f1 * 20.0F);
         entity.yHeadRot = entity.getYRot();
-        entity.yRotO = entity.getYRot();
-        entity.xRotO = entity.getXRot();
-        InventoryScreen.renderEntityInInventory(gfx, (float)x, (float)y, (float)scale, new Vector3f(0,0,0), quaternionf, quaternionf1, entity);
+        entity.yRotO    = entity.getYRot();
+        entity.xRotO    = entity.getXRot();
+
+        InventoryScreen.renderEntityInInventory(gfx, (float) x, (float) y, (float) scale,
+                new Vector3f(0, 0, 0), quaternionf, quaternionf1, entity);
+
         entity.yBodyRot = yBodyRot;
         entity.setYRot(yHeadRot);
         entity.setXRot(xRot);
         entity.yHeadRot = yHeadRot;
-        entity.yRotO = yRotO;
-        entity.xRotO = xRotO;
+        entity.yRotO    = yRotO;
+        entity.xRotO    = xRotO;
     }
 
-    // 升级后的 IconButton 类
-    private static class IconButton extends Button {
-        @Nullable
-        private MTGuiIcons icon;
-        @Nullable
-        private ItemStack itemStack; // [新增]
-        private long lastPressTime = 0;
+    // ── IconButton ────────────────────────────────────────────────────────────
 
-        // 构造函数 A: 使用 MTGuiIcons
+    /**
+     * Extends the basic icon button with:
+     * <ul>
+     *   <li>Dual icon source: {@link MTGuiIcons} atlas or {@link ItemStack}.</li>
+     *   <li>Highlighted state: renders a gold (0xFFFFD700) 1-pixel border when active,
+     *       used to indicate the currently selected Aggressive level.</li>
+     * </ul>
+     */
+    private static class IconButton extends Button {
+
+        @Nullable private MTGuiIcons  icon;
+        @Nullable private ItemStack   itemStack;
+        private boolean highlighted  = false;
+        private long    lastPressTime = 0;
+
+        // 允许自由偏移图标绘制位置
+        private int iconOffsetX = 0;
+        private int iconOffsetY = 0;
+
         protected IconButton(int x, int y, MTGuiIcons icon, OnPress onPress, Component tooltip) {
             super(x, y, 20, 20, Component.empty(), onPress, DEFAULT_NARRATION);
-            this.icon = icon;
+            this.icon      = icon;
             this.itemStack = null;
             this.setTooltip(Tooltip.create(tooltip));
         }
 
-        // [新增] 构造函数 B: 使用 ItemStack
+        /** Constructor B: ItemStack icon (item rendered at 16×16, offset +2). */
         protected IconButton(int x, int y, ItemStack itemStack, OnPress onPress, Component tooltip) {
             super(x, y, 20, 20, Component.empty(), onPress, DEFAULT_NARRATION);
             this.itemStack = itemStack;
-            this.icon = null;
+            this.icon      = null;
             this.setTooltip(Tooltip.create(tooltip));
         }
 
+        public IconButton setIconOffset(int offsetX, int offsetY) {
+            this.iconOffsetX = offsetX;
+            this.iconOffsetY = offsetY;
+            return this;
+        }
+
         public void setIcon(MTGuiIcons newIcon) {
-            this.icon = newIcon;
+            this.icon      = newIcon;
             this.itemStack = null;
+        }
+
+        /**
+         * Marks this button as the "active" state.
+         * When {@code true} a gold border is drawn around the button background.
+         */
+        public void setHighlighted(boolean highlighted) {
+            this.highlighted = highlighted;
         }
 
         @Override
@@ -287,21 +390,27 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         public void renderWidget(@NotNull GuiGraphics gfx, int mouseX, int mouseY, float partialTick) {
             boolean isPressed = System.currentTimeMillis() - lastPressTime < 1000;
 
-            // 1. 渲染按钮底座 (始终来自 MTGuiIcons)
-            if (isPressed) {
-                MTGuiIcons.BUTTON_PRESSED.render(gfx, this.getX(), this.getY());
-            } else if (this.isHoveredOrFocused()) {
-                MTGuiIcons.BUTTON_HOVER.render(gfx, this.getX(), this.getY());
-            } else {
-                MTGuiIcons.BUTTON_NORMAL.render(gfx, this.getX(), this.getY());
+            // Highlighted border (1px gold ring drawn behind the button base)
+            if (highlighted) {
+                gfx.fill(getX() - 1, getY() - 1, getX() + width + 1, getY() + height + 1, 0xFFFFD700);
             }
 
-            // 2. 渲染前景 (图标 或 物品)
+            // Button base
+            if (isPressed) {
+                MTGuiIcons.BUTTON_PRESSED.render(gfx, getX(), getY());
+            } else if (isHoveredOrFocused()) {
+                MTGuiIcons.BUTTON_HOVER.render(gfx, getX(), getY());
+            } else {
+                MTGuiIcons.BUTTON_NORMAL.render(gfx, getX(), getY());
+            }
+
+            int renderX = getX() + 2 + iconOffsetX;
+            int renderY = getY() + 2 + iconOffsetY;
+
             if (this.itemStack != null) {
-                // 渲染物品 (偏移 2,2 以居中，因为按钮是 20x20，物品是 16x16)
-                gfx.renderItem(this.itemStack, this.getX() + 2, this.getY() + 2);
+                gfx.renderItem(this.itemStack, renderX, renderY);
             } else if (this.icon != null) {
-                this.icon.render(gfx, this.getX() + 2, this.getY() + 2);
+                this.icon.render(gfx, renderX, renderY);
             }
         }
     }

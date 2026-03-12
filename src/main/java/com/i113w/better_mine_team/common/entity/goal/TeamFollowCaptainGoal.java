@@ -14,11 +14,12 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.scores.PlayerTeam;
+import com.i113w.better_mine_team.common.entity.goal.TeamGoal;
 
 import java.util.EnumSet;
 import java.util.UUID;
 
-public class TeamFollowCaptainGoal extends Goal {
+public class TeamFollowCaptainGoal extends Goal implements TeamGoal {
     private final Mob mob;
     private ServerPlayer captain;
     private final double speedModifier;

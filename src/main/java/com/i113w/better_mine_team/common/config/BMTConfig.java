@@ -1,6 +1,7 @@
 package com.i113w.better_mine_team.common.config;
 
 import com.i113w.better_mine_team.BetterMineTeam;
+import com.i113w.better_mine_team.common.entity.goal.GoalSanitizer;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -26,6 +27,9 @@ public class BMTConfig {
     private static final ModConfigSpec.BooleanValue enableMobTaming;
     private static final ModConfigSpec.BooleanValue showInventoryTeamButtons;
     private static final ModConfigSpec.BooleanValue autoAssignCaptain;
+    private static final ModConfigSpec.BooleanValue aggressiveGoalRemovalEnabled;
+    private static final ModConfigSpec.ConfigValue<List<? extends String>> protectedGoalClasses;
+
     private static final ModConfigSpec.BooleanValue enableTeammateCarry;
     private static final ModConfigSpec.BooleanValue enableSummonAutoJoin;
     private static final ModConfigSpec.ConfigValue<List<? extends String>> summonAutoJoinBlacklist;
@@ -44,6 +48,11 @@ public class BMTConfig {
     private static final ModConfigSpec.IntValue attackCommitmentHardTicks;
     private static final ModConfigSpec.IntValue attackCommitmentSoftTicks;
     private static final ModConfigSpec.DoubleValue attackCommitmentSwitchRatio;
+    private static final ModConfigSpec.IntValue defaultAggressiveLevel;
+    private static final ModConfigSpec.IntValue aggressiveScanEntityInterval;
+    private static final ModConfigSpec.IntValue aggressiveScanTeamCooldown;
+    private static final ModConfigSpec.DoubleValue aggressiveScanRadius;
+    private static final ModConfigSpec.ConfigValue<List<? extends String>> aggressiveEntityBlacklist;
 
     private static final ModConfigSpec.DoubleValue guardFollowRange;
     private static final ModConfigSpec.DoubleValue warPropagationRange;
@@ -126,6 +135,23 @@ public class BMTConfig {
                 .comment("Automatically assign captain permission when a player joins a team that has no other players.")
                 .comment("This ignores non-player entities (mobs) in the team.")
                 .define("autoAssignCaptain", true);
+        aggressiveGoalRemovalEnabled = builder
+                .comment("When enabled, aggressive AI Goals (target selection and melee/ranged attack goals)")
+                .comment("will be removed from a mob's goalSelector and targetSelector when it joins a team.")
+                .comment("Basic locomotion goals (wandering, floating, door-opening, etc.) are always preserved.")
+                .comment("Goals listed in 'protectedGoalClasses' are also never removed regardless of this setting.")
+                .comment("Default: false")
+                .define("aggressiveGoalRemovalEnabled", false);
+
+        protectedGoalClasses = builder
+                .comment("Fully-qualified class names of Goal subclasses that must NEVER be removed during")
+                .comment("aggressive-goal sanitization, even if they would otherwise be considered aggressive.")
+                .comment("The built-in entry 'com.i113w.spears.event.MountVehicleGoal' is always protected")
+                .comment("and does not need to be listed here.")
+                .comment("Example: [\"com.example.mymod.ai.MySpecialGoal\"]")
+                .defineListAllowEmpty("protectedGoalClasses",
+                        List.of(),   // default: empty (built-ins are handled in GoalSanitizer)
+                        o -> o instanceof String);
         builder.pop();
 
         builder.push("ai");
@@ -205,6 +231,38 @@ public class BMTConfig {
         summonAutoJoinBlacklist = builder
                 .comment("List of entity IDs that should NOT auto-join the owner's team when summoned.")
                 .define("summonAutoJoinBlacklist", List.of("minecraft:wither_skull"), o -> true);
+
+        defaultAggressiveLevel = builder
+                .comment("Default Aggressive level assigned to mobs when they join a team.")
+                .comment("0 = Passive (current behavior, no proactive attacks)")
+                .comment("1 = Guard  (attacks entities that are currently targeting a team member)")
+                .comment("2 = Aggressive (attacks all non-team PathfinderMobs in range)")
+                .defineInRange("defaultAggressiveLevel", 0, 0, 2);
+
+        aggressiveScanEntityInterval = builder
+                .comment("How often (in ticks) each individual mob runs its aggressive scan.")
+                .comment("Lower = more responsive but higher CPU. Default: 20 ticks (1 second).")
+                .defineInRange("aggressiveScanEntityInterval", 20, 5, 200);
+
+        aggressiveScanTeamCooldown = builder
+                .comment("Minimum ticks between full AABB scans for the same team.")
+                .comment("When multiple mobs of the same team would scan simultaneously,")
+                .comment("only the first one executes the query; others skip until cooldown expires.")
+                .comment("Default: 10 ticks (0.5 seconds).")
+                .defineInRange("aggressiveScanTeamCooldown", 10, 1, 100);
+
+        aggressiveScanRadius = builder
+                .comment("Radius (in blocks) of the AABB search used for Level 1 and Level 2 aggressive scans.")
+                .comment("Default: 16.0 blocks.")
+                .defineInRange("aggressiveScanRadius", 16.0, 4.0, 64.0);
+
+        aggressiveEntityBlacklist = builder
+                .comment("Entity type resource locations to exclude from Level 2 aggressive targeting.")
+                .comment("These entities will never be attacked by Level 2 mobs, regardless of team.")
+                .comment("Example: [\"minecraft:villager\", \"minecraft:snow_golem\"]")
+                .defineListAllowEmpty("aggressiveEntityBlacklist",
+                        List.of("minecraft:villager", "minecraft:wandering_trader"),
+                        o -> o instanceof String);
         builder.pop();
 
         builder.push("dragon");
@@ -305,6 +363,7 @@ public class BMTConfig {
             ResourceLocation rl = ResourceLocation.tryParse(id);
             if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(entityDetailsScreenBlacklistCache::add);
         }
+        GoalSanitizer.loadProtectedClasses();
     }
 
     private static void loadDefaultMaterial() { cachedDefaultIngredient = parseIngredientString(defaultTamingMaterial.get(), Items.GOLDEN_APPLE); }
@@ -372,4 +431,23 @@ public class BMTConfig {
     public static int getAttackCommitmentHardTicks()   { return attackCommitmentHardTicks.get(); }
     public static int getAttackCommitmentSoftTicks()    { return attackCommitmentSoftTicks.get(); }
     public static double getAttackCommitmentSwitchRatio() { return attackCommitmentSwitchRatio.get(); }
+    public static boolean isAggressiveGoalRemovalEnabled() {
+        return aggressiveGoalRemovalEnabled.get();
+    }
+
+    @SuppressWarnings("unchecked")
+    public static List<String> getProtectedGoalClasses() {
+        return (List<String>) protectedGoalClasses.get();
+    }
+
+    public static int getDefaultAggressiveLevel()      { return defaultAggressiveLevel.get(); }
+    public static int getAggressiveScanEntityInterval() { return aggressiveScanEntityInterval.get(); }
+    public static int getAggressiveScanTeamCooldown()   { return aggressiveScanTeamCooldown.get(); }
+    public static double getAggressiveScanRadius()      { return aggressiveScanRadius.get(); }
+
+    @SuppressWarnings("unchecked")
+    public static List<String> getAggressiveEntityBlacklist() {
+        return (List<String>) aggressiveEntityBlacklist.get();
+    }
+
 }

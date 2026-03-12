@@ -1,6 +1,7 @@
 package com.i113w.better_mine_team.common.rts.ai.goal;
 
 import com.i113w.better_mine_team.BetterMineTeam;
+import com.i113w.better_mine_team.common.entity.goal.TeamGoal;
 import com.i113w.better_mine_team.common.registry.ModAttachments;
 import com.i113w.better_mine_team.common.network.data.CommandType;
 import com.i113w.better_mine_team.common.rts.data.RTSUnitData;
@@ -13,7 +14,7 @@ import net.minecraft.world.scores.PlayerTeam;
 
 import java.util.EnumSet;
 
-public class RTSMoveGoal extends Goal {
+public class RTSMoveGoal extends Goal implements TeamGoal {
     private final PathfinderMob mob;
     private final double speedModifier;
     private RTSUnitData data;

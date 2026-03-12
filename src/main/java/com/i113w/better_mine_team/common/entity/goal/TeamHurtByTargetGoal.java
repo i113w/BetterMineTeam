@@ -16,21 +16,33 @@ import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 
-public class TeamHurtByTargetGoal extends TargetGoal {
+/**
+ * Replaces all vanilla target-selection goals for team mobs.
+ *
+ * <p>Implements {@link TeamGoal} so that {@link GoalSanitizer} never removes
+ * this goal when processing a mob that joins a team.</p>
+ *
+ * <h3>Attack Commitment system</h3>
+ * Prevents target thrashing when two enemies are equidistant.  Uses a two-phase window:
+ * <ol>
+ *   <li><b>Hard lock</b> (configurable, default 20 t): refuses any target switch.</li>
+ *   <li><b>Soft commitment</b> (remainder up to configurable total, default 60 t):
+ *       allows switching only when the new target is significantly closer
+ *       (see {@code attackCommitmentSwitchRatio}).</li>
+ * </ol>
+ * Commitment is broken early by: target death/removal, cross-dimension teleport,
+ * target escaping follow-range, or a third-party attacker hitting the mob recently.
+ */
+public class TeamHurtByTargetGoal extends TargetGoal implements TeamGoal {
 
     private LivingEntity targetToAttack;
-    private int checkTicker = 0;
+    private int checkTicker   = 0;
     private int debugCooldown = 0;
 
-    // -------------------------------------------------------
-    // Attack Commitment
-    // 时间轴（commitmentTicks 倒计时）：
-    //   softTicks → (softTicks - hardTicks)  : 硬锁阶段，拒绝一切目标切换
-    //   (softTicks - hardTicks) → 1          : 软承诺阶段，仅允许距离优势显著时切换
-    //   0                                    : 自由切换阶段，恢复原有逻辑
-    // -------------------------------------------------------
+    // ── Attack Commitment ────────────────────────────────────────────────────
     private WeakReference<LivingEntity> committedTarget = new WeakReference<>(null);
     private int commitmentTicks = 0;
+    // ─────────────────────────────────────────────────────────────────────────
 
     public TeamHurtByTargetGoal(Mob mob) {
         super(mob, false);
@@ -58,7 +70,7 @@ public class TeamHurtByTargetGoal extends TargetGoal {
                 this.mob.getName().getString(), myTeam.getName(), bestThreat.getName().getString());
 
         if (!this.canAttack(bestThreat, TargetingConditions.DEFAULT)) {
-            BetterMineTeam.debug("Goal Failed: canAttack returned false.");
+            BetterMineTeam.debug("Goal Failed: canAttack returned false. DistSqr: {}", this.mob.distanceToSqr(bestThreat));
             return false;
         }
 
@@ -83,8 +95,7 @@ public class TeamHurtByTargetGoal extends TargetGoal {
             AABB searchBox = this.mob.getBoundingBox().inflate(scanRange, 8.0D, scanRange);
 
             List<LivingEntity> closeEnemies = this.mob.level().getEntitiesOfClass(LivingEntity.class, searchBox, entity -> {
-                if (entity == this.mob) return false;
-                if (!entity.isAlive()) return false;
+                if (entity == this.mob || !entity.isAlive()) return false;
                 PlayerTeam otherTeam = TeamManager.getTeam(entity);
                 return otherTeam != null && otherTeam.getName().equals(enemyTeam.getName());
             });
@@ -143,26 +154,23 @@ public class TeamHurtByTargetGoal extends TargetGoal {
         double distToNew = this.mob.distanceToSqr(bestNow);
 
         // 硬锁阶段阈值：commitmentTicks 高于此值时，拒绝一切切换
-        int softThreshold = BMTConfig.getAttackCommitmentSoftTicks() - BMTConfig.getAttackCommitmentHardTicks();
+        int hardThreshold = BMTConfig.getAttackCommitmentSoftTicks() - BMTConfig.getAttackCommitmentHardTicks();
 
-        if (commitmentTicks > softThreshold) {
-            // === 硬锁阶段：直接拒绝 ===
-            BetterMineTeam.debug("Hard commitment blocking switch for {} ({} ticks left)",
+        if (commitmentTicks > hardThreshold) {
+            // === 硬锁阶段：拒绝 ===
+            BetterMineTeam.debug("Hard lock: blocking switch for {} ({} ticks left)",
                     this.mob.getName().getString(), commitmentTicks);
             return;
         }
 
         if (commitmentTicks > 0) {
-            // === 软承诺阶段：新目标距离必须达到切换比率才能切换 ===
-            // 例如 switchRatio=0.5 表示新目标必须在当前目标距离的 50% 以内
+            // === Soft-commitment phase: switch only when new target has significant distance advantage ===
             double switchRatio = BMTConfig.getAttackCommitmentSwitchRatio();
-            if (distToNew >= distToCurrent * switchRatio) {
-                return; // 距离优势不够，维持当前目标
-            }
-            BetterMineTeam.debug("Soft commitment overridden for {} (new target {:.1f}% closer)",
-                    this.mob.getName().getString(), (1.0 - distToNew / distToCurrent) * 100);
+            if (distToNew >= distToCurrent * switchRatio) return;
+            BetterMineTeam.debug("Soft commitment overridden for {} (new target is sufficiently closer)",
+                    this.mob.getName().getString());
         } else {
-            // === 自由切换阶段：沿用原有 16.0D 线性阈值 ===
+            // === Free-switch phase: original 16-unit linear threshold ===
             if (distToNew >= distToCurrent - 16.0D) return;
         }
 
@@ -220,8 +228,7 @@ public class TeamHurtByTargetGoal extends TargetGoal {
 
         // 条件 4：目标超出 followRange 的 2 倍（注意 distanceToSqr 返回平方值）
         double followRange = this.mob.getAttributeValue(Attributes.FOLLOW_RANGE);
-        double maxRangeSqr = followRange * followRange * 4.0; // (followRange * 2)²
-        if (this.mob.distanceToSqr(target) > maxRangeSqr) return true;
+        if (this.mob.distanceToSqr(target) > followRange * followRange * 4.0) return true;
 
         // 条件 5：近期被第三方敌人攻击（攻击者不是当前承诺目标）
         LivingEntity lastAttacker = this.mob.getLastHurtByMob();
