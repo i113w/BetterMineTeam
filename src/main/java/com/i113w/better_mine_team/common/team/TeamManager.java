@@ -36,7 +36,7 @@ public class TeamManager {
     private static final ConcurrentHashMap<String, Long> aggressiveScanTimestamps = new ConcurrentHashMap<>();
     public static void initTeams(MinecraftServer server) {
         Scoreboard scoreboard = server.getScoreboard();
-        for (DyeColor color : DyeColor.values()) {
+        for (DyeColor color : ORIGINAL_DYE_COLORS) {
             String teamName = getTeamName(color);
             PlayerTeam playerTeam = scoreboard.getPlayerTeam(teamName);
             if (playerTeam == null) {
@@ -216,6 +216,36 @@ public class TeamManager {
             case RED -> ChatFormatting.RED;
             case BLACK -> ChatFormatting.BLACK;
         };
+    }
+
+    public static final DyeColor[] ORIGINAL_DYE_COLORS = {
+            DyeColor.WHITE,
+            DyeColor.ORANGE,
+            DyeColor.MAGENTA,
+            DyeColor.LIGHT_BLUE,
+            DyeColor.YELLOW,
+            DyeColor.LIME,
+            DyeColor.PINK,
+            DyeColor.GRAY,
+            DyeColor.LIGHT_GRAY,
+            DyeColor.CYAN,
+            DyeColor.PURPLE,
+            DyeColor.BLUE,
+            DyeColor.BROWN,
+            DyeColor.GREEN,
+            DyeColor.RED,
+            DyeColor.BLACK
+    };
+
+
+    // 辅助方法：安全获取原版颜色（防止新颜色导致问题）
+    public static DyeColor getOriginalColorByName(String name, DyeColor fallback) {
+        for (DyeColor color : ORIGINAL_DYE_COLORS) {
+            if (color.getName().equals(name)) {
+                return color;
+            }
+        }
+        return fallback;
     }
 
     public static String getTeamName(DyeColor color) {

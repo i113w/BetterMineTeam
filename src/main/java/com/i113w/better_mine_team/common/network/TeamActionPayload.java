@@ -51,7 +51,8 @@ public record TeamActionPayload(int action, String data, boolean state) implemen
 
             // Action 0: 切换队伍
             if (payload.action == 0) {
-                DyeColor color = DyeColor.byName(payload.data, null);
+                // 使用安全方法获取颜色
+                DyeColor color = TeamManager.getOriginalColorByName(payload.data, null);
 
                 if (color != null) {
                     String newTeamName = TeamManager.getTeamName(color);

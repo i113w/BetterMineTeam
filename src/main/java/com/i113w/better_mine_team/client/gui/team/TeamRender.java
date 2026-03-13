@@ -161,7 +161,8 @@ public class TeamRender {
     }
 
     private void initSmallIcon(int guiLeft, int guiTop) {
-        List<String> teamColors = Arrays.stream(DyeColor.values())
+        // 原版颜色数组
+        List<String> teamColors = Arrays.stream(TeamManager.ORIGINAL_DYE_COLORS)
                 .map(DyeColor::getName)
                 .toList().reversed();
 
@@ -254,12 +255,17 @@ public class TeamRender {
 
     private String getTextureColorName(PlayerTeam team) {
         if (team.getName().startsWith(TeamManager.TEAM_PREFIX)) {
-            return team.getName().substring(TeamManager.TEAM_PREFIX.length());
+            String colorName = team.getName().substring(TeamManager.TEAM_PREFIX.length());
+            // 只验证原版颜色
+            if (TeamManager.getOriginalColorByName(colorName, null) != null) {
+                return colorName;
+            }
         }
         ChatFormatting formatting = team.getColor();
         if (formatting != ChatFormatting.RESET) {
             String name = formatting.getName().toLowerCase();
-            if (DyeColor.byName(name, null) != null) return name;
+            // 使用安全方法验证
+            if (TeamManager.getOriginalColorByName(name, null) != null) return name;
         }
         return "white";
     }
