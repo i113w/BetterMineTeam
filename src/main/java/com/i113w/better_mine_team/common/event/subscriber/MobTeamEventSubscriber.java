@@ -39,6 +39,7 @@ public class MobTeamEventSubscriber {
 
 
     public static void setupTeamAI(Mob mob) {
+        mob.setTarget(null);
         // 先清理非白名单的原版敌意目标
         GoalSanitizer.sanitize(mob);
 

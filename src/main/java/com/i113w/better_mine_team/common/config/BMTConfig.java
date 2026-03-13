@@ -26,10 +26,7 @@ public class BMTConfig {
     private static final ModConfigSpec.DoubleValue remoteInventoryRange;
     private static final ModConfigSpec.BooleanValue enableMobTaming;
     private static final ModConfigSpec.BooleanValue showInventoryTeamButtons;
-    private static final ModConfigSpec.BooleanValue autoAssignCaptain;
-    private static final ModConfigSpec.BooleanValue aggressiveGoalRemovalEnabled;
-    private static final ModConfigSpec.ConfigValue<List<? extends String>> protectedGoalClasses;
-
+    private static final ModConfigSpec.BooleanValue enableRTSMode;
     private static final ModConfigSpec.BooleanValue enableTeammateCarry;
     private static final ModConfigSpec.BooleanValue enableSummonAutoJoin;
     private static final ModConfigSpec.ConfigValue<List<? extends String>> summonAutoJoinBlacklist;
@@ -41,7 +38,13 @@ public class BMTConfig {
     private static final Set<EntityType<?>> teamMemberListBlacklistCache = new HashSet<>();
     private static final Set<EntityType<?>> entityDetailsScreenBlacklistCache = new HashSet<>();
 
-    // AI 参数
+    // 队伍逻辑与 AI 参数
+    private static final ModConfigSpec.BooleanValue autoAssignCaptain;
+    private static final ModConfigSpec.BooleanValue aggressiveGoalRemovalEnabled;
+    private static final ModConfigSpec.ConfigValue<List<? extends String>> protectedGoalClasses;
+    private static final ModConfigSpec.ConfigValue<List<? extends String>> blacklistedGoalClasses;
+    private static final ModConfigSpec.BooleanValue blockUnauthorizedAttacks;
+
     private static final ModConfigSpec.BooleanValue defaultFollowEnabled;
     private static final ModConfigSpec.BooleanValue enableAutoTeleport;
     private static final ModConfigSpec.DoubleValue autoTeleportDistance;
@@ -109,6 +112,10 @@ public class BMTConfig {
                 .comment("Whether to show the Team/PvP buttons in the inventory screen.")
                 .define("showInventoryTeamButtons", true);
 
+        enableRTSMode = builder
+                .comment("Enable RTS Mode and its UI buttons in the Team Management screen.")
+                .define("enableRTSMode", true);
+
         enableTeammateCarry = builder
                 .comment("Allow players to pick up (Carry On) team members, even if they are hostile mobs or blacklisted.")
                 .comment("Requires 'Carry On' mod to be installed.")
@@ -126,7 +133,7 @@ public class BMTConfig {
         entityDetailsScreenBlacklist = builder
                 .comment("List of entity IDs whose inventory/details screen cannot be opened by normal players.")
                 .comment("TeamsLord admins can bypass this restriction.")
-                .comment("Example: [\"minecraft:zombie\", \"minecraft:skeleton\"]")
+                .comment("Example:[\"minecraft:zombie\", \"minecraft:skeleton\"]")
                 .defineListAllowEmpty("entityDetailsScreenBlacklist", List.of(), o -> o instanceof String);
         builder.pop();
 
@@ -135,23 +142,29 @@ public class BMTConfig {
                 .comment("Automatically assign captain permission when a player joins a team that has no other players.")
                 .comment("This ignores non-player entities (mobs) in the team.")
                 .define("autoAssignCaptain", true);
+
         aggressiveGoalRemovalEnabled = builder
                 .comment("When enabled, aggressive AI Goals (target selection and melee/ranged attack goals)")
                 .comment("will be removed from a mob's goalSelector and targetSelector when it joins a team.")
                 .comment("Basic locomotion goals (wandering, floating, door-opening, etc.) are always preserved.")
                 .comment("Goals listed in 'protectedGoalClasses' are also never removed regardless of this setting.")
-                .comment("Default: false")
-                .define("aggressiveGoalRemovalEnabled", false);
+                .comment("Default: true")
+                .define("aggressiveGoalRemovalEnabled", true);
 
         protectedGoalClasses = builder
                 .comment("Fully-qualified class names of Goal subclasses that must NEVER be removed during")
                 .comment("aggressive-goal sanitization, even if they would otherwise be considered aggressive.")
-                .comment("The built-in entry 'com.i113w.spears.event.MountVehicleGoal' is always protected")
-                .comment("and does not need to be listed here.")
                 .comment("Example: [\"com.example.mymod.ai.MySpecialGoal\"]")
-                .defineListAllowEmpty("protectedGoalClasses",
-                        List.of(),   // default: empty (built-ins are handled in GoalSanitizer)
-                        o -> o instanceof String);
+                .defineListAllowEmpty("protectedGoalClasses", List.of(), o -> o instanceof String);
+
+        blacklistedGoalClasses = builder
+                .comment("Fully-qualified class names of Goal subclasses that must ALWAYS be removed during")
+                .comment("sanitization, regardless of whether they are TargetGoals or in the whitelist.")
+                .defineListAllowEmpty("blacklistedGoalClasses", List.of(), o -> o instanceof String);
+
+        blockUnauthorizedAttacks = builder
+                .comment("If true, blocks attacks from team members that are initiated by vanilla AI instead of TeamGoals.")
+                .define("blockUnauthorizedAttacks", true);
         builder.pop();
 
         builder.push("ai");
@@ -395,7 +408,9 @@ public class BMTConfig {
     public static boolean isSummonAutoJoinEnabled() { return enableSummonAutoJoin.get(); }
     public static boolean isSummonBlacklisted(EntityType<?> type) { return summonBlacklistCache.contains(type); }
 
-    // GUI 黑名单 Getters
+    public static boolean isRTSModeEnabled() { return enableRTSMode.get(); } // [新增]
+    public static boolean isBlockUnauthorizedAttacksEnabled() { return blockUnauthorizedAttacks.get(); } // [新增]
+
     public static boolean isEntityHiddenFromMemberList(EntityType<?> type) { return teamMemberListBlacklistCache.contains(type); }
     public static boolean isEntityDetailsScreenBlacklisted(EntityType<?> type) { return entityDetailsScreenBlacklistCache.contains(type); }
 
@@ -431,14 +446,13 @@ public class BMTConfig {
     public static int getAttackCommitmentHardTicks()   { return attackCommitmentHardTicks.get(); }
     public static int getAttackCommitmentSoftTicks()    { return attackCommitmentSoftTicks.get(); }
     public static double getAttackCommitmentSwitchRatio() { return attackCommitmentSwitchRatio.get(); }
-    public static boolean isAggressiveGoalRemovalEnabled() {
-        return aggressiveGoalRemovalEnabled.get();
-    }
+    public static boolean isAggressiveGoalRemovalEnabled() { return aggressiveGoalRemovalEnabled.get(); }
 
     @SuppressWarnings("unchecked")
-    public static List<String> getProtectedGoalClasses() {
-        return (List<String>) protectedGoalClasses.get();
-    }
+    public static List<String> getProtectedGoalClasses() { return (List<String>) protectedGoalClasses.get(); }
+
+    @SuppressWarnings("unchecked")
+    public static List<String> getBlacklistedGoalClasses() { return (List<String>) blacklistedGoalClasses.get(); } // [新增]
 
     public static int getDefaultAggressiveLevel()      { return defaultAggressiveLevel.get(); }
     public static int getAggressiveScanEntityInterval() { return aggressiveScanEntityInterval.get(); }
@@ -449,5 +463,4 @@ public class BMTConfig {
     public static List<String> getAggressiveEntityBlacklist() {
         return (List<String>) aggressiveEntityBlacklist.get();
     }
-
 }

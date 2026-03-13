@@ -66,16 +66,16 @@ public class RTSMoveGoal extends Goal implements TeamGoal {
         this.forcePathTimer = 0;
         this.arrivedSuccessfully = false;
 
-        // ✅ Goal 统一控制 Navigation（不在 Controller 里调用）
         boolean success = mob.getNavigation().moveTo(this.targetX, this.targetY, this.targetZ, this.speedModifier);
-        BetterMineTeam.LOGGER.info("🚀 RTSMoveGoal START: {} moving to ({}, {}, {})",
+
+        // 改为 BetterMineTeam.debug()，只有在配置中开启 enableDebugLogging 时才输出。
+        BetterMineTeam.debug("[RTSMoveGoal] START: {} moving to ({}, {}, {})",
                 mob.getName().getString(), targetX, targetY, targetZ);
-        // Debug 日志（可选，调试时启用）
+        BetterMineTeam.debug("[RTSMoveGoal] Navigation success: {}", success);
+
         if (!success) {
-            BetterMineTeam.debug("RTSMoveGoal: Navigation failed for {} to {}",
-                    mob.getName().getString(), target);
+            BetterMineTeam.debug("[RTSMoveGoal] Navigation failed for {} to {}", mob.getName().getString(), target);
         }
-        BetterMineTeam.LOGGER.info("Navigation success: {}", success);
     }
 
     @Override

@@ -2,11 +2,13 @@ package com.i113w.better_mine_team.common.event.subscriber;
 
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.config.BMTConfig;
+import com.i113w.better_mine_team.common.entity.goal.TeamGoal;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.projectile.EvokerFangs;
 import net.minecraft.world.scores.PlayerTeam;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -61,6 +63,25 @@ public class LivingEventSubscriber {
         if (attackerTeam != null && targetTeam != null && attackerTeam.isAlliedTo(targetTeam)) {
             event.setCanceled(true);
         }
+
+        // 利用 Config 动态控制是否开启未授权拦截
+        if (BMTConfig.isBlockUnauthorizedAttacksEnabled()) {
+            if (!(attacker instanceof Mob mob)) return;
+            if (attackerTeam == null) return;
+
+            boolean authorizedByTeamGoal = mob.targetSelector.getAvailableGoals().stream()
+                    .anyMatch(wg -> wg.isRunning() && wg.getGoal() instanceof TeamGoal);
+
+            if (!authorizedByTeamGoal) {
+                BetterMineTeam.debug(
+                        "[BMT] Blocked unauthorized attack: {} (Team={}) → {}",
+                        mob.getName().getString(),
+                        attackerTeam.getName(),
+                        newTarget.getName().getString());
+                event.setCanceled(true);
+            }
+        }
+
     }
 
     @SubscribeEvent

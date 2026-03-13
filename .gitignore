@@ -36,6 +36,9 @@ latest.log
 .DS_Store
 Thumbs.db
 
+# cache
+src/generated/resources/.cache
+
 # --- 假如你有一些不小心生成的 jar 包 ---
 *.jar
 # 但不忽略 libs 文件夹里的 jar (如果你有的话)

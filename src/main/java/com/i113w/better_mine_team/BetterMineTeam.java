@@ -4,6 +4,7 @@ import com.i113w.better_mine_team.client.ClientSetup;
 import com.i113w.better_mine_team.client.ModKeyMappings;
 import com.i113w.better_mine_team.common.registry.ModAttachments; // [新增]
 import com.i113w.better_mine_team.common.registry.ModEntities;     // [新增]
+import com.i113w.better_mine_team.data.DataGenerators;
 import com.mojang.logging.LogUtils;
 import com.i113w.better_mine_team.common.config.BMTConfig;
 import net.minecraft.resources.ResourceLocation;
@@ -30,6 +31,8 @@ public class BetterMineTeam {
 
     public BetterMineTeam(IEventBus modEventBus, ModContainer modContainer) {
         modEventBus.addListener(this::onFMLCommonSetup);
+
+        modEventBus.addListener(DataGenerators::gatherData);
 
         // 注册配置文件
         modContainer.registerConfig(ModConfig.Type.COMMON, BMTConfig.CONFIG, "better_mine_team.toml");

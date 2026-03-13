@@ -67,26 +67,28 @@ public class TeamManagementScreen extends Screen {
         int btnHeight = 20;
         int spacing = 4;
 
-        // RTS 按钮
-        this.addRenderableWidget(Button.builder(Component.translatable("better_mine_team.gui.btn.rts_mode"), button -> {
-                    this.onClose();
-                    RTSCameraManager.get().toggleRTSMode(RTSCameraManager.RTSMode.CONTROL); // 进入指挥模式
-                })
-                .bounds(btnX, btnY, 60, btnHeight)
-                .build());
-
-        btnY += btnHeight + spacing;
-
-        // 2. [新增] Recruit 按钮 (仅限 TeamsLord)
-        if (this.minecraft.player != null && TeamPermissions.hasOverridePermission(this.minecraft.player)) {
-            this.addRenderableWidget(Button.builder(Component.literal("Recruit"), button -> {
+        // Config 判断包裹 RTS 相关的两个按钮
+        if (BMTConfig.isRTSModeEnabled()) {
+            // 1. RTS 按钮
+            this.addRenderableWidget(Button.builder(Component.translatable("better_mine_team.gui.btn.rts_mode"), button -> {
                         this.onClose();
-                        RTSCameraManager.get().toggleRTSMode(RTSCameraManager.RTSMode.RECRUIT);
+                        RTSCameraManager.get().toggleRTSMode(RTSCameraManager.RTSMode.CONTROL); // 进入指挥模式
                     })
                     .bounds(btnX, btnY, 60, btnHeight)
                     .build());
-
             btnY += btnHeight + spacing;
+
+            // 2. Recruit 按钮 (仅限 TeamsLord)
+            if (this.minecraft.player != null && TeamPermissions.hasOverridePermission(this.minecraft.player)) {
+                this.addRenderableWidget(Button.builder(Component.literal("Recruit"), button -> {
+                            this.onClose();
+                            RTSCameraManager.get().toggleRTSMode(RTSCameraManager.RTSMode.RECRUIT);
+                        })
+                        .bounds(btnX, btnY, 60, btnHeight)
+                        .build());
+
+                btnY += btnHeight + spacing;
+            }
         }
 
         // 3. Close 按钮 (始终在最后)
@@ -136,9 +138,7 @@ public class TeamManagementScreen extends Screen {
 
     // 修复 IDE 警告：添加 @NotNull
     @Override
-    public void renderBackground(@NotNull GuiGraphics gfx, int mouseX, int mouseY, float partialTick) {
-        // 保持为空，防止毛玻璃
-    }
+    public void renderBackground(@NotNull GuiGraphics gfx, int mouseX, int mouseY, float partialTick) {}
 
     private void refreshMembers() {
         if (this.minecraft == null || this.minecraft.level == null || this.minecraft.player == null) return;
@@ -240,8 +240,7 @@ public class TeamManagementScreen extends Screen {
         }
     }
 
-
-private int tickCounter = 0;
+    private int tickCounter = 0;
     @Override
     public void tick() {
         super.tick();

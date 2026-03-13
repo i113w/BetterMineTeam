@@ -2,15 +2,13 @@ package com.i113w.better_mine_team.common.entity.goal;
 
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.config.BMTConfig;
+import com.i113w.better_mine_team.common.registry.ModTags;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.goal.target.TargetGoal;
 import net.minecraft.world.entity.ai.targeting.TargetingConditions;
-import net.minecraft.world.entity.ambient.AmbientCreature;
-import net.minecraft.world.entity.animal.Animal;
-import net.minecraft.world.entity.animal.WaterAnimal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.scores.PlayerTeam;
@@ -120,10 +118,7 @@ public class AggressiveScanGoal extends TargetGoal implements TeamGoal {
     }
 
     private boolean isLevel2Target(LivingEntity candidate) {
-        if (!(candidate instanceof PathfinderMob)) return false;
-        if (candidate instanceof Animal) return false;
-        if (candidate instanceof WaterAnimal) return false;
-        if (candidate instanceof AmbientCreature) return false;
-        return true;
+        // 如果该实体存在于 Tag 黑名单中，则忽略
+        return !candidate.getType().is(ModTags.Entities.IGNORED_BY_LEVEL2_SCAN);
     }
 }
