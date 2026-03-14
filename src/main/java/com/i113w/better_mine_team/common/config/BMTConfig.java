@@ -274,7 +274,7 @@ public class BMTConfig {
                 .comment("These entities will never be attacked by Level 2 mobs, regardless of team.")
                 .comment("Example: [\"minecraft:villager\", \"minecraft:snow_golem\"]")
                 .defineListAllowEmpty("aggressiveEntityBlacklist",
-                        List.of("minecraft:villager", "minecraft:wandering_trader"),
+                        List.of("minecraft:pig"),
                         o -> o instanceof String);
         builder.pop();
 
