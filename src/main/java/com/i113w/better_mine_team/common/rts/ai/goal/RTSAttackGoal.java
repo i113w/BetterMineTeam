@@ -1,6 +1,7 @@
 package com.i113w.better_mine_team.common.rts.ai.goal;
 
 import com.i113w.better_mine_team.BetterMineTeam;
+import com.i113w.better_mine_team.common.entity.goal.TeamGoal;
 import com.i113w.better_mine_team.common.network.data.CommandType;
 import com.i113w.better_mine_team.common.rts.data.RTSUnitData;
 import com.i113w.better_mine_team.common.team.TeamManager;
@@ -12,7 +13,7 @@ import net.minecraft.world.scores.PlayerTeam;
 
 import java.util.EnumSet;
 
-public class RTSAttackGoal extends Goal {
+public class RTSAttackGoal extends Goal implements TeamGoal {
     private final Mob mob;
     private RTSUnitData data;
     private int targetIdCheckTimer = 0;

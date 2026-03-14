@@ -4,6 +4,8 @@ import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.compat.LoadedCompat;
 import com.i113w.better_mine_team.common.compat.irons_spellbooks.IronsSpellbooksCompat;
 import com.i113w.better_mine_team.common.config.BMTConfig;
+import com.i113w.better_mine_team.common.entity.goal.AggressiveScanGoal;
+import com.i113w.better_mine_team.common.entity.goal.GoalSanitizer;
 import com.i113w.better_mine_team.common.entity.goal.TeamFollowCaptainGoal;
 import com.i113w.better_mine_team.common.entity.goal.TeamHurtByTargetGoal;
 import com.i113w.better_mine_team.common.team.TeamManager;
@@ -26,6 +28,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
+import net.minecraftforge.event.entity.living.LivingChangeTargetEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -39,18 +42,76 @@ import org.jetbrains.annotations.Nullable;
 @Mod.EventBusSubscriber(modid = BetterMineTeam.MODID)
 public class MobTeamEventSubscriber {
 
-    @SubscribeEvent
-    public static void onEntityJoinWorld(EntityJoinLevelEvent event) {
-        if (event.getLevel().isClientSide()) return;
-        if (BMTConfig.isSummonAutoJoinEnabled() && event.getEntity() instanceof LivingEntity living) {
-            handleSummonedEntityTeam(living, (ServerLevel) event.getLevel());
-        }
-        if (event.getEntity() instanceof Mob mob) {
+    // 统一 AI 注入方法
+    public static void setupTeamAI(Mob mob) {
+        mob.setTarget(null);
+        GoalSanitizer.sanitize(mob);
+
+        boolean hasTeamHurt = mob.targetSelector.getAvailableGoals().stream()
+                .anyMatch(w -> w.getGoal() instanceof TeamHurtByTargetGoal);
+        if (!hasTeamHurt) {
             mob.targetSelector.addGoal(1, new TeamHurtByTargetGoal(mob));
+        }
+
+        boolean hasFollow = mob.goalSelector.getAvailableGoals().stream()
+                .anyMatch(w -> w.getGoal() instanceof TeamFollowCaptainGoal);
+        if (!hasFollow) {
             mob.goalSelector.addGoal(2, new TeamFollowCaptainGoal(mob,
                     BMTConfig.getGuardFollowSpeed(),
                     BMTConfig.getGuardFollowStartDist(),
                     BMTConfig.getGuardFollowStopDist()));
+        }
+
+        if (mob instanceof net.minecraft.world.entity.PathfinderMob pathfinderMob) {
+            boolean hasAggressive = pathfinderMob.targetSelector.getAvailableGoals().stream()
+                    .anyMatch(w -> w.getGoal() instanceof AggressiveScanGoal);
+            if (!hasAggressive) {
+                pathfinderMob.targetSelector.addGoal(2, new AggressiveScanGoal(pathfinderMob));
+            }
+        }
+    }
+
+    // 监听实体切换目标，唤醒附近的守卫
+    @SubscribeEvent
+    public static void onLivingChangeTargetWakeUp(LivingChangeTargetEvent event) {
+        if (!(event.getEntity().level() instanceof ServerLevel serverLevel)) return;
+
+        LivingEntity aggressor = event.getEntity();
+        LivingEntity newTarget  = event.getNewTarget(); // [Forge 1.20.1]
+        if (newTarget == null) return;
+
+        PlayerTeam victimTeam = TeamManager.getTeam(newTarget);
+        if (victimTeam == null) return;
+        if (TeamManager.isAlly(aggressor, newTarget)) return;
+
+        double alertRadius = BMTConfig.getAggressiveScanRadius();
+        net.minecraft.world.phys.AABB alertBox = aggressor.getBoundingBox().inflate(alertRadius, 8.0, alertRadius);
+
+        serverLevel.getEntitiesOfClass(net.minecraft.world.entity.PathfinderMob.class, alertBox, guard -> {
+            if (!guard.isAlive()) return false;
+            PlayerTeam guardTeam = TeamManager.getTeam(guard);
+            if (guardTeam == null || !guardTeam.getName().equals(victimTeam.getName())) return false;
+            return TeamManager.getAggressiveLevel(guard) >= 1;
+        }).forEach(guard ->
+                guard.targetSelector.getAvailableGoals().forEach(wrapper -> {
+                    if (wrapper.getGoal() instanceof AggressiveScanGoal scanGoal) {
+                        scanGoal.resetScanTicker();
+                    }
+                })
+        );
+    }
+    @SubscribeEvent
+    public static void onEntityJoinWorld(EntityJoinLevelEvent event) {
+        if (event.getLevel().isClientSide()) return;
+
+        if (BMTConfig.isSummonAutoJoinEnabled() && event.getEntity() instanceof LivingEntity living) {
+            handleSummonedEntityTeam(living, (ServerLevel) event.getLevel());
+        }
+
+        if (event.getEntity() instanceof Mob mob) {
+            if (TeamManager.getTeam(mob) != null) {
+                setupTeamAI(mob);
+            }
         }
     }
 
@@ -91,7 +152,6 @@ public class MobTeamEventSubscriber {
                 PlayerTeam playerTeam = scoreboard.getPlayersTeam(player.getScoreboardName());
 
                 if (targetTeam == null && playerTeam != null) {
-                    // [关键修改] 1.20.1 使用 shrink() 代替 consume()
                     itemstack.shrink(1);
 
                     scoreboard.addPlayerToTeam(livingEntity.getStringUUID(), playerTeam);
@@ -105,16 +165,14 @@ public class MobTeamEventSubscriber {
                     }
 
                     livingEntity.setHealth(livingEntity.getMaxHealth());
+
                     livingEntity.getPersistentData().putBoolean("bmt_follow_enabled", BMTConfig.getDefaultFollowState());
 
                     if (livingEntity instanceof Mob mob) {
                         mob.setPersistenceRequired();
-                        mob.targetSelector.addGoal(1, new TeamHurtByTargetGoal(mob));
-                        mob.goalSelector.addGoal(2, new TeamFollowCaptainGoal(mob,
-                                BMTConfig.getGuardFollowSpeed(),
-                                BMTConfig.getGuardFollowStartDist(),
-                                BMTConfig.getGuardFollowStopDist()));
+                        setupTeamAI(mob);
                     }
+
                     livingEntity.setGlowingTag(true);
 
                     event.setCanceled(true);
@@ -138,14 +196,22 @@ public class MobTeamEventSubscriber {
         Scoreboard scoreboard = level.getScoreboard();
         scoreboard.addPlayerToTeam(summon.getStringUUID(), ownerTeam);
 
-        var followAttribute = summon.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.FOLLOW_RANGE);
+        var followAttribute = summon.getAttribute(Attributes.FOLLOW_RANGE);
         if (followAttribute != null) {
             double newRange = BMTConfig.getGuardFollowRange();
-            if (followAttribute.getBaseValue() < newRange) followAttribute.setBaseValue(newRange);
+            if (followAttribute.getBaseValue() < newRange) {
+                followAttribute.setBaseValue(newRange);
+            }
         }
 
         summon.setGlowingTag(true);
         summon.getPersistentData().putBoolean("bmt_summoned", true);
+
+        summon.getPersistentData().putBoolean("bmt_follow_enabled", BMTConfig.getDefaultFollowState());
+
+        if (summon instanceof Mob mob) {
+            setupTeamAI(mob);
+        }
 
         BetterMineTeam.debug("Summoned Entity {} auto-joined team {} (Owner: {})",
                 summon.getName().getString(), ownerTeam.getName(), owner.getName().getString());

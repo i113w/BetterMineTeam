@@ -11,6 +11,7 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -36,6 +37,8 @@ public class TeamManagementPacket {
     public static final int ACTION_SET_CAPTAIN = 5;
     public static final int ACTION_OPEN_INVENTORY = 6;
     public static final int ACTION_SYNC_FOLLOW_STATE = 7;
+    public static final int ACTION_SET_AGGRESSIVE_LEVEL = 8;
+    public static final int ACTION_GET_AGGRESSIVE_LEVEL = 9;
 
     private final int actionType;
     private final int targetEntityId;
@@ -109,6 +112,11 @@ public class TeamManagementPacket {
                         boolean newState = !current;
                         mob.getPersistentData().putBoolean("bmt_follow_enabled", newState);
 
+                        // 如果关闭了跟随，打断当前生物正在进行的原版寻路系统
+                        if (!newState) {
+                            mob.getNavigation().stop();
+                        }
+
                         TeamManagementPacket syncPacket = new TeamManagementPacket(ACTION_SYNC_FOLLOW_STATE, mob.getId(), String.valueOf(newState));
                         com.i113w.better_mine_team.common.init.MTNetworkRegister.CHANNEL.send(
                                 net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player), syncPacket
@@ -171,6 +179,12 @@ public class TeamManagementPacket {
                             return;
                         }
 
+                        int aggrLevel = TeamManager.getAggressiveLevel(livingTarget);
+                        com.i113w.better_mine_team.common.init.MTNetworkRegister.CHANNEL.send(
+                                net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
+                                new TeamManagementPacket(ACTION_GET_AGGRESSIVE_LEVEL, livingTarget.getId(), String.valueOf(aggrLevel))
+                        );
+
                         NetworkHooks.openScreen(
                                 player,
                                 new SimpleMenuProvider(
@@ -184,6 +198,37 @@ public class TeamManagementPacket {
                                 }
                         );
                     }
+                }
+                case ACTION_SET_AGGRESSIVE_LEVEL -> {
+                    if (!isCaptain) { sendPermissionError(player); return; }
+                    if (!(target instanceof LivingEntity livingTarget)) return;
+
+                    int newLevel = Mth.clamp(Integer.parseInt(msg.extraData), 0, 2);
+                    int oldLevel = TeamManager.getAggressiveLevel(livingTarget);
+                    TeamManager.setAggressiveLevel(livingTarget, newLevel);
+
+                    // 如果玩家将模式设为了 0（Passive），强制清空它现在的攻击目标，打断攻击行为
+                    if (newLevel == 0 && oldLevel > 0 && livingTarget instanceof Mob mobTarget) {
+                        mobTarget.setTarget(null);
+                    }
+
+                    BetterMineTeam.debug("SET_AGGRESSIVE_LEVEL: {} set level {} on {}.",
+                            player.getName().getString(), newLevel, livingTarget.getName().getString());
+
+                    // 回传更新后的等级
+                    com.i113w.better_mine_team.common.init.MTNetworkRegister.CHANNEL.send(
+                            net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
+                            new TeamManagementPacket(ACTION_GET_AGGRESSIVE_LEVEL, livingTarget.getId(), String.valueOf(newLevel))
+                    );
+                }
+                case ACTION_GET_AGGRESSIVE_LEVEL -> {
+                    if (!(target instanceof LivingEntity livingTarget)) return;
+                    int currentLevel = TeamManager.getAggressiveLevel(livingTarget);
+
+                    com.i113w.better_mine_team.common.init.MTNetworkRegister.CHANNEL.send(
+                            net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
+                            new TeamManagementPacket(ACTION_GET_AGGRESSIVE_LEVEL, livingTarget.getId(), String.valueOf(currentLevel))
+                    );
                 }
             }
         } catch (Exception e) {
@@ -206,6 +251,13 @@ public class TeamManagementPacket {
                 if (entity != null) {
                     boolean newState = Boolean.parseBoolean(msg.extraData);
                     entity.getPersistentData().putBoolean("bmt_follow_enabled", newState);
+                }
+            }
+            else if (msg.actionType == ACTION_GET_AGGRESSIVE_LEVEL) {
+                // 通知当前打开的屏幕更新 UI
+                int level2 = Mth.clamp(Integer.parseInt(msg.extraData), 0, 2);
+                if (mc.screen instanceof com.i113w.better_mine_team.client.gui.screen.EntityDetailsScreen screen) {
+                    screen.setAggressiveLevel(level2);
                 }
             }
         }

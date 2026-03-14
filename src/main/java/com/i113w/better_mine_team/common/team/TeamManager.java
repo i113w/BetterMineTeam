@@ -67,7 +67,7 @@ public class TeamManager {
     // [新增] 扫描冷却记录，防止团战时 TPS 暴跌
     // Key: TeamName, Value: 上次全图扫描的 GameTime
     private static final Map<String, Long> teamScanCooldowns = new ConcurrentHashMap<>();
-
+    private static final java.util.concurrent.ConcurrentHashMap<String, Long> aggressiveScanTimestamps = new java.util.concurrent.ConcurrentHashMap<>();
     /**
      * 服务器启动时初始化队伍
      */
@@ -100,8 +100,17 @@ public class TeamManager {
         teamThreats.clear();
         teamScanCooldowns.clear();
         BetterMineTeam.debug("TeamManager data cleared.");
+        aggressiveScanTimestamps.clear();
     }
 
+    public static boolean isAggressiveScanOnCooldown(PlayerTeam team, long currentTime) {
+        long lastScan = aggressiveScanTimestamps.getOrDefault(team.getName(), 0L);
+        return (currentTime - lastScan) < BMTConfig.getAggressiveScanTeamCooldown();
+    }
+
+    public static void markAggressiveScanDone(PlayerTeam team, long currentTime) {
+        aggressiveScanTimestamps.put(team.getName(), currentTime);
+    }
     /**
      * 添加单一仇恨目标
      */
@@ -356,5 +365,15 @@ public class TeamManager {
                 return newList;
             });
         }
+    }
+    public static int getAggressiveLevel(LivingEntity entity) {
+        net.minecraft.nbt.CompoundTag data = entity.getPersistentData();
+        if (!data.contains("bmt_aggressive_level")) {
+            return BMTConfig.getDefaultAggressiveLevel();
+        }
+        return net.minecraft.util.Mth.clamp(data.getInt("bmt_aggressive_level"), 0, 2);
+    }
+    public static void setAggressiveLevel(LivingEntity entity, int level) {
+        entity.getPersistentData().putInt("bmt_aggressive_level", net.minecraft.util.Mth.clamp(level, 0, 2));
     }
 }

@@ -18,12 +18,17 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.lwjgl.glfw.GLFW;
 
 public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMenu> {
 
+    private int currentAggressiveLevel = 0;
+    @Nullable private IconButton aggressiveBtn0;
+    @Nullable private IconButton aggressiveBtn1;
+    @Nullable private IconButton aggressiveBtn2;
     private static final ResourceLocation BG_TEXTURE = new ResourceLocation(
             BetterMineTeam.MODID, "textures/gui/entity_details.png"
     );
@@ -67,43 +72,52 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         int btnY = this.topPos + 130;
         int spacing = 22;
 
-        // 使用辅助方法添加按钮，它会自动将 String key 转换为 Component
-        this.addRenderableWidget(new IconButton(
-                btnX, btnY,
-                net.minecraft.world.item.Items.ENDER_PEARL, // 使用原版物品
-                (btn) -> {
-                    sendAction(TeamManagementPacket.ACTION_TELEPORT, "");
-                },
-                Component.translatable("better_mine_team.gui.tooltip.teleport")
-        ));
+        // ── Row 1 ──
+        IconButton teleportBtn = new IconButton(btnX, btnY, net.minecraft.world.item.Items.ENDER_PEARL, (btn) -> {
+            sendAction(TeamManagementPacket.ACTION_TELEPORT, "");
+        }, Component.translatable("better_mine_team.gui.tooltip.teleport"));
+        teleportBtn.setIconOffset(-1, 0); // 偏移修正
+        this.addRenderableWidget(teleportBtn);
 
-        this.addRenderableWidget(new IconButton(
-                btnX + spacing, btnY,
-                net.minecraft.world.item.Items.NAME_TAG, // 使用原版物品
-                (btn) -> {
-                    toggleRenameMode();
-                },
-                Component.translatable("better_mine_team.gui.tooltip.rename")
-        ));
+        this.addRenderableWidget(new IconButton(btnX + spacing, btnY, net.minecraft.world.item.Items.NAME_TAG, (btn) -> {
+            toggleRenameMode();
+        }, Component.translatable("better_mine_team.gui.tooltip.rename")));
 
-        // [修复] 手动通过 new IconButton 创建时，必须显式调用 Component.translatable
-        this.followButton = new IconButton(
-                btnX,
-                btnY + spacing,
-                MTGuiIcons.ICON_FOLLOW_OFF,
-                (btn) -> {
-                    sendAction(TeamManagementPacket.ACTION_TOGGLE_FOLLOW, "");
-                    // 移除旧的预测逻辑，等待服务器同步
-                },
-                Component.translatable("better_mine_team.gui.tooltip.follow") // 修复处：String -> Component
-        );
+        this.followButton = new IconButton(btnX + spacing * 2, btnY, MTGuiIcons.ICON_FOLLOW_OFF, (btn) -> {
+            sendAction(TeamManagementPacket.ACTION_TOGGLE_FOLLOW, "");
+        }, Component.translatable("better_mine_team.gui.tooltip.follow"));
         this.addRenderableWidget(this.followButton);
         updateFollowButtonState();
 
-        // addIconButton(btnX + spacing, btnY + spacing, MTGuiIcons.ICON_RTS, (btn) -> {
-        // }, "better_mine_team.gui.tooltip.rts");
+        // ── Row 2: Aggressive Levels ──
+        int aggrBtnY = btnY + spacing;
+
+        this.aggressiveBtn0 = new IconButton(btnX, aggrBtnY, MTGuiIcons.ICON_LEVEL_0, btn -> onAggressiveLevelChange(0), Component.translatable("better_mine_team.gui.tooltip.aggressive.level0"));
+        this.aggressiveBtn1 = new IconButton(btnX + spacing, aggrBtnY, MTGuiIcons.ICON_LEVEL_1, btn -> onAggressiveLevelChange(1), Component.translatable("better_mine_team.gui.tooltip.aggressive.level1"));
+        this.aggressiveBtn2 = new IconButton(btnX + spacing * 2, aggrBtnY, MTGuiIcons.ICON_LEVEL_2, btn -> onAggressiveLevelChange(2), Component.translatable("better_mine_team.gui.tooltip.aggressive.level2"));
+
+        this.addRenderableWidget(this.aggressiveBtn0);
+        this.addRenderableWidget(this.aggressiveBtn1);
+        this.addRenderableWidget(this.aggressiveBtn2);
+
+        // 请求服务端当前等级
+        sendAction(TeamManagementPacket.ACTION_GET_AGGRESSIVE_LEVEL, "");
+    }
+    public void setAggressiveLevel(int level) {
+        this.currentAggressiveLevel = net.minecraft.util.Mth.clamp(level, 0, 2);
+        if (aggressiveBtn0 != null) {
+            aggressiveBtn0.setHighlighted(currentAggressiveLevel == 0);
+            aggressiveBtn1.setHighlighted(currentAggressiveLevel == 1);
+            aggressiveBtn2.setHighlighted(currentAggressiveLevel == 2);
+        }
     }
 
+    private void onAggressiveLevelChange(int newLevel) {
+        if (newLevel == currentAggressiveLevel) return;
+        currentAggressiveLevel = newLevel;
+        setAggressiveLevel(newLevel);
+        sendAction(TeamManagementPacket.ACTION_SET_AGGRESSIVE_LEVEL, String.valueOf(newLevel));
+    }
     @Override
     public void containerTick() {
         super.containerTick();
@@ -256,16 +270,17 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
     private static class IconButton extends Button {
         private MTGuiIcons icon;
         private ItemStack itemStack = ItemStack.EMPTY;
+        private boolean highlighted = false;
         private long lastPressTime = 0;
+        private int iconOffsetX = 0;
+        private int iconOffsetY = 0;
 
-        // 构造函数 1: 使用自定义图标 (MTGuiIcons)
         protected IconButton(int x, int y, MTGuiIcons icon, OnPress onPress, Component tooltip) {
             super(x, y, 20, 20, Component.empty(), onPress, DEFAULT_NARRATION);
             this.icon = icon;
             this.setTooltip(Tooltip.create(tooltip));
         }
 
-        // 构造函数 2: 使用原版物品 (Item)
         protected IconButton(int x, int y, net.minecraft.world.item.Item item, OnPress onPress, Component tooltip) {
             super(x, y, 20, 20, Component.empty(), onPress, DEFAULT_NARRATION);
             this.icon = null;
@@ -273,9 +288,19 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
             this.setTooltip(Tooltip.create(tooltip));
         }
 
+        public IconButton setIconOffset(int offsetX, int offsetY) {
+            this.iconOffsetX = offsetX;
+            this.iconOffsetY = offsetY;
+            return this;
+        }
+
         public void setIcon(MTGuiIcons newIcon) {
             this.icon = newIcon;
             this.itemStack = ItemStack.EMPTY;
+        }
+
+        public void setHighlighted(boolean highlighted) {
+            this.highlighted = highlighted;
         }
 
         @Override
@@ -288,6 +313,11 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         public void renderWidget(@NotNull GuiGraphics gfx, int mouseX, int mouseY, float partialTick) {
             boolean isPressed = System.currentTimeMillis() - lastPressTime < 1000;
 
+            // Highlighted border (绘制金色外框)
+            if (highlighted) {
+                gfx.fill(getX() - 1, getY() - 1, getX() + width + 1, getY() + height + 1, 0xFFFFD700);
+            }
+
             if (isPressed) {
                 MTGuiIcons.BUTTON_PRESSED.render(gfx, this.getX(), this.getY());
             } else if (this.isHoveredOrFocused()) {
@@ -296,13 +326,13 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
                 MTGuiIcons.BUTTON_NORMAL.render(gfx, this.getX(), this.getY());
             }
 
-            // 2. 渲染内容 (优先渲染物品)
+            int renderX = getX() + 2 + iconOffsetX;
+            int renderY = getY() + 2 + iconOffsetY;
+
             if (!this.itemStack.isEmpty()) {
-                // 渲染原版物品
-                gfx.renderItem(this.itemStack, this.getX() + 2, this.getY() + 2);
+                gfx.renderItem(this.itemStack, renderX, renderY);
             } else if (this.icon != null) {
-                // 渲染自定义图标
-                this.icon.render(gfx, this.getX() + 2, this.getY() + 2);
+                this.icon.render(gfx, renderX, renderY);
             }
         }
     }

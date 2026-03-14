@@ -2,8 +2,7 @@ package com.i113w.better_mine_team.common.network.handler;
 
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.config.BMTConfig;
-import com.i113w.better_mine_team.common.entity.goal.TeamFollowCaptainGoal;
-import com.i113w.better_mine_team.common.entity.goal.TeamHurtByTargetGoal;
+import com.i113w.better_mine_team.common.event.subscriber.MobTeamEventSubscriber;
 import com.i113w.better_mine_team.common.init.MTNetworkRegister;
 import com.i113w.better_mine_team.common.network.rts.C2S_IssueCommandPacket;
 import com.i113w.better_mine_team.common.network.rts.C2S_SelectionSyncPacket;
@@ -224,14 +223,10 @@ public class ServerPacketHandler {
             }
 
             mob.setHealth(mob.getMaxHealth());
-            mob.getPersistentData().putBoolean("bmt_follow_enabled", BMTConfig.getDefaultFollowState()); // 修改处
+            mob.getPersistentData().putBoolean("bmt_follow_enabled", BMTConfig.getDefaultFollowState());
             mob.setPersistenceRequired();
 
-            mob.targetSelector.addGoal(1, new TeamHurtByTargetGoal(mob));
-            mob.goalSelector.addGoal(2, new TeamFollowCaptainGoal(mob,
-                    BMTConfig.getGuardFollowSpeed(),
-                    BMTConfig.getGuardFollowStartDist(),
-                    BMTConfig.getGuardFollowStopDist()));
+            MobTeamEventSubscriber.setupTeamAI(mob);
 
             mob.setGlowingTag(true);
             successCount++;

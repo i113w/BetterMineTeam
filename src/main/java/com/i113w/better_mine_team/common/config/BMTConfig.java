@@ -48,6 +48,22 @@ public class BMTConfig {
     private static ForgeConfigSpec.BooleanValue SUMMON_AUTO_JOIN;
     private static ForgeConfigSpec.ConfigValue<List<? extends String>> SUMMON_BLACKLIST;
 
+    private static final ForgeConfigSpec.BooleanValue enableRTSMode;
+
+    private static final ForgeConfigSpec.BooleanValue aggressiveGoalRemovalEnabled;
+    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> protectedGoalClasses;
+    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> blacklistedGoalClasses;
+    private static final ForgeConfigSpec.BooleanValue blockUnauthorizedAttacks;
+
+    private static final ForgeConfigSpec.IntValue attackCommitmentHardTicks;
+    private static final ForgeConfigSpec.IntValue attackCommitmentSoftTicks;
+    private static final ForgeConfigSpec.DoubleValue attackCommitmentSwitchRatio;
+    private static final ForgeConfigSpec.IntValue defaultAggressiveLevel;
+    private static final ForgeConfigSpec.IntValue aggressiveScanEntityInterval;
+    private static final ForgeConfigSpec.IntValue aggressiveScanTeamCooldown;
+    private static final ForgeConfigSpec.DoubleValue aggressiveScanRadius;
+    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> aggressiveEntityBlacklist;
+
     // GUI Blacklist
     private static ForgeConfigSpec.ConfigValue<List<? extends String>> teamMemberListBlacklist;
     private static ForgeConfigSpec.ConfigValue<List<? extends String>> entityDetailsScreenBlacklist;
@@ -86,6 +102,14 @@ public class BMTConfig {
         showInventoryTeamButtons = builder.comment("Whether to show the Team/PvP buttons in the inventory screen.").define("showInventoryTeamButtons", true);
         autoGrantCaptainOnJoin = builder.comment("If true, when a player joins a team that has no other PLAYERS, they will automatically become the captain.").define("autoGrantCaptainOnJoin", true);
         enableTeammateCarry = builder.comment("Allow players to pick up (Carry On) team members, even if they are hostile mobs or blacklisted.\nRequires 'Carry On' mod to be installed.").define("enableTeammateCarry", true);
+        enableRTSMode = builder.comment("Enable RTS Mode and its UI buttons in the Team Management screen.").define("enableRTSMode", true);
+        builder.pop();
+
+        builder.push("team_logic");
+        aggressiveGoalRemovalEnabled = builder.comment("When enabled, aggressive AI Goals will be removed from a mob's goalSelector when it joins a team.").define("aggressiveGoalRemovalEnabled", true);
+        protectedGoalClasses = builder.comment("Fully-qualified class names of Goal subclasses that must NEVER be removed.").defineListAllowEmpty("protectedGoalClasses", List.of(), o -> o instanceof String);
+        blacklistedGoalClasses = builder.comment("Fully-qualified class names of Goal subclasses that must ALWAYS be removed.").defineListAllowEmpty("blacklistedGoalClasses", List.of(), o -> o instanceof String);
+        blockUnauthorizedAttacks = builder.comment("If true, blocks attacks from team members that are initiated by vanilla AI instead of TeamGoals.").define("blockUnauthorizedAttacks", true);
         builder.pop();
 
         builder.push("ai");
@@ -99,6 +123,15 @@ public class BMTConfig {
         defaultFollowState = builder.comment("Whether mobs should default to 'Follow' mode when joining a team.").define("defaultFollowState", false);
         enableFollowTeleport = builder.comment("Whether mobs should automatically teleport to the captain when too far away (like vanilla pets).").define("enableFollowTeleport", true);
         followTeleportDistance = builder.comment("The distance (in blocks) at which a mob will teleport to the captain.").defineInRange("followTeleportDistance", 24.0, 5.0, 128.0);
+        attackCommitmentHardTicks = builder.comment("Duration (in ticks) of the HARD commitment phase after a mob locks onto a target.").defineInRange("attackCommitmentHardTicks", 20, 0, 200);
+        attackCommitmentSoftTicks = builder.comment("Total duration (in ticks) of the full commitment window.").defineInRange("attackCommitmentSoftTicks", 60, 0, 400);
+        attackCommitmentSwitchRatio = builder.comment("During soft commitment phase, new target must be within this fraction of the current target's distance.").defineInRange("attackCommitmentSwitchRatio", 0.5, 0.1, 1.0);
+
+        defaultAggressiveLevel = builder.comment("Default Aggressive level assigned to mobs when they join a team.").defineInRange("defaultAggressiveLevel", 0, 0, 2);
+        aggressiveScanEntityInterval = builder.comment("How often (in ticks) each individual mob runs its aggressive scan.").defineInRange("aggressiveScanEntityInterval", 20, 5, 200);
+        aggressiveScanTeamCooldown = builder.comment("Minimum ticks between full AABB scans for the same team.").defineInRange("aggressiveScanTeamCooldown", 10, 1, 100);
+        aggressiveScanRadius = builder.comment("Radius (in blocks) of the AABB search used for Level 1 and Level 2 aggressive scans.").defineInRange("aggressiveScanRadius", 16.0, 4.0, 64.0);
+        aggressiveEntityBlacklist = builder.comment("Entity type resource locations to exclude from Level 2 aggressive targeting.").defineListAllowEmpty("aggressiveEntityBlacklist", List.of("minecraft:pig"), o -> o instanceof String);
         builder.pop();
 
         builder.push("rts");
@@ -224,6 +257,9 @@ public class BMTConfig {
         teamMemberBlacklistCache = newTeamMemberCache;
         entityDetailsBlacklistCache = newEntityDetailsCache;
         tamingMaterialMap        = newTamingMap;
+
+
+        com.i113w.better_mine_team.common.entity.goal.GoalSanitizer.loadProtectedClasses();
     }
 
 
@@ -302,4 +338,23 @@ public class BMTConfig {
         teamMemberBlacklistCache    = snapshot.teamMemberBlacklist();
         entityDetailsBlacklistCache = snapshot.entityDetailsBlacklist();
     }
+    public static boolean isRTSModeEnabled() { return enableRTSMode.get(); }
+
+    public static boolean isAggressiveGoalRemovalEnabled() { return aggressiveGoalRemovalEnabled.get(); }
+    @SuppressWarnings("unchecked")
+    public static List<String> getProtectedGoalClasses() { return (List<String>) protectedGoalClasses.get(); }
+    @SuppressWarnings("unchecked")
+    public static List<String> getBlacklistedGoalClasses() { return (List<String>) blacklistedGoalClasses.get(); }
+    public static boolean isBlockUnauthorizedAttacksEnabled() { return blockUnauthorizedAttacks.get(); }
+
+    public static int getAttackCommitmentHardTicks() { return attackCommitmentHardTicks.get(); }
+    public static int getAttackCommitmentSoftTicks() { return attackCommitmentSoftTicks.get(); }
+    public static double getAttackCommitmentSwitchRatio() { return attackCommitmentSwitchRatio.get(); }
+
+    public static int getDefaultAggressiveLevel() { return defaultAggressiveLevel.get(); }
+    public static int getAggressiveScanEntityInterval() { return aggressiveScanEntityInterval.get(); }
+    public static int getAggressiveScanTeamCooldown() { return aggressiveScanTeamCooldown.get(); }
+    public static double getAggressiveScanRadius() { return aggressiveScanRadius.get(); }
+    @SuppressWarnings("unchecked")
+    public static List<String> getAggressiveEntityBlacklist() { return (List<String>) aggressiveEntityBlacklist.get(); }
 }

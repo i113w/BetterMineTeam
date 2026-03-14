@@ -2,11 +2,15 @@ package com.i113w.better_mine_team.common.event.subscriber;
 
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.config.BMTConfig;
+import com.i113w.better_mine_team.common.entity.goal.TeamGoal;
+import com.i113w.better_mine_team.common.network.data.CommandType;
+import com.i113w.better_mine_team.common.rts.data.RTSUnitData;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.monster.Slime;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraftforge.event.TickEvent;
@@ -51,7 +55,7 @@ public class LivingEventSubscriber {
     @SubscribeEvent
     public static void onLivingChangeTarget(LivingChangeTargetEvent event) {
         LivingEntity attacker = event.getEntity();
-        LivingEntity newTarget = event.getNewTarget();
+        LivingEntity newTarget = event.getNewTarget(); // 必须是 getNewTarget()
 
         if (attacker.level().isClientSide || newTarget == null) return;
 
@@ -60,8 +64,37 @@ public class LivingEventSubscriber {
 
         if (attackerTeam != null && targetTeam != null && attackerTeam.isAlliedTo(targetTeam)) {
             event.setCanceled(true);
+            return;
+        }
+
+        // 完善未授权攻击拦截的判断逻辑
+        if (BMTConfig.isBlockUnauthorizedAttacksEnabled()) {
+            if (!(attacker instanceof Mob mob)) return;
+            if (attackerTeam == null) return;
+
+            // 1. 检查目标选择器是否有 TeamGoal 正在运行
+            boolean hasTargetGoal = mob.targetSelector.getAvailableGoals().stream()
+                    .anyMatch(wg -> wg.isRunning() && wg.getGoal() instanceof TeamGoal);
+
+            // 2. 检查移动/攻击选择器是否有 TeamGoal 正在运行 (给 RTSMoveGoal 用)
+            boolean hasActionGoal = mob.goalSelector.getAvailableGoals().stream()
+                    .anyMatch(wg -> wg.isRunning() && wg.getGoal() instanceof TeamGoal);
+
+            // 3. 检查是否是由于网络包发来的 RTS ATTACK 指令直接强制设置的目标
+            boolean isRtsCommand = false;
+            RTSUnitData data = RTSUnitData.get(mob);
+            if (data.getCommand() == CommandType.ATTACK && data.getTargetEntityId() == newTarget.getId()) {
+                isRtsCommand = true;
+            }
+
+            // 如果三者都不满足，说明这是残留的原版脑部(Brain)或未清理干净的AI发起的攻击
+            if (!hasTargetGoal && !hasActionGoal && !isRtsCommand) {
+                BetterMineTeam.debug("[BMT] Blocked unauthorized attack: {} -> {}", mob.getName().getString(), newTarget.getName().getString());
+                event.setCanceled(true);
+            }
         }
     }
+
 
     /**
      * [修复] 使用 LivingAttackEvent 拦截 PVP/友伤。

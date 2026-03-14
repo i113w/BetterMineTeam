@@ -51,47 +51,44 @@ public class TeamManagementScreen extends Screen {
     protected void init() {
         super.init();
 
-        // 计算居中 (以 176x166 为基准)
         this.guiLeft = (this.width - CONTENT_WIDTH) / 2;
         this.guiTop = (this.height - CONTENT_HEIGHT) / 2;
 
-        // 初始化列表 (自动对齐到 guiLeft + 7)
         this.memberList = new TeamMemberList(this.minecraft, this.guiLeft, this.guiTop);
         refreshMembers();
         this.addRenderableWidget(this.memberList);
 
-        // 初始化按钮 (紧贴内容区右侧)f
         int btnX = this.guiLeft + CONTENT_WIDTH + 4;
         int btnY = this.guiTop;
         int btnHeight = 20;
         int spacing = 4;
 
-        // RTS 按钮
-        this.addRenderableWidget(Button.builder(
-                        Component.translatable("better_mine_team.gui.btn.rts_mode"),
-                        button -> {
-                            this.onClose();
-                            RTSCameraManager.get().toggleRTSMode(RTSCameraManager.RTSMode.CONTROL);
-                        })
-                .bounds(btnX, btnY, 60, btnHeight)
-                .build());
-
-        btnY += btnHeight + spacing;
-
-        // Recruit
-        if (this.minecraft.player != null && TeamPermissions.hasOverridePermission(this.minecraft.player)) {
+        // [修改] 根据 Config 判断是否渲染 RTS 相关按钮
+        if (BMTConfig.isRTSModeEnabled()) {
             this.addRenderableWidget(Button.builder(
-                            Component.translatable("better_mine_team.gui.btn.recruit"),
+                            Component.translatable("better_mine_team.gui.btn.rts_mode"),
                             button -> {
                                 this.onClose();
-                                RTSCameraManager.get().toggleRTSMode(RTSCameraManager.RTSMode.RECRUIT);
+                                RTSCameraManager.get().toggleRTSMode(RTSCameraManager.RTSMode.CONTROL);
                             })
                     .bounds(btnX, btnY, 60, btnHeight)
                     .build());
-
             btnY += btnHeight + spacing;
+
+            if (this.minecraft.player != null && TeamPermissions.hasOverridePermission(this.minecraft.player)) {
+                this.addRenderableWidget(Button.builder(
+                                Component.translatable("better_mine_team.gui.btn.recruit"),
+                                button -> {
+                                    this.onClose();
+                                    RTSCameraManager.get().toggleRTSMode(RTSCameraManager.RTSMode.RECRUIT);
+                                })
+                        .bounds(btnX, btnY, 60, btnHeight)
+                        .build());
+                btnY += btnHeight + spacing;
+            }
         }
-        // 关闭按钮
+
+        // Close 按钮
         this.addRenderableWidget(Button.builder(
                         Component.translatable("better_mine_team.gui.btn.close"),
                         button -> this.onClose())

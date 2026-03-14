@@ -16,7 +16,7 @@ import net.minecraft.world.scores.PlayerTeam;
 import java.util.EnumSet;
 import java.util.UUID;
 
-public class TeamFollowCaptainGoal extends Goal {
+public class TeamFollowCaptainGoal extends Goal implements TeamGoal {
     private final Mob mob;
     private ServerPlayer captain;
     private final double speedModifier;
@@ -41,12 +41,9 @@ public class TeamFollowCaptainGoal extends Goal {
         this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
     }
 
-    @Override
-    public boolean canUse() {
-        if (debugCooldown > 0) debugCooldown--;
-
-        boolean isFollowEnabled = this.mob.getPersistentData().getBoolean("bmt_follow_enabled");
-        if (!isFollowEnabled) return false;
+    // 提取公共的状态检查逻辑，供 canUse 和 canContinueToUse 共同调用
+    private boolean isFollowConditionMet() {
+        if (!this.mob.getPersistentData().getBoolean("bmt_follow_enabled")) return false;
 
         PlayerTeam mobTeam = TeamManager.getTeam(this.mob);
         if (mobTeam == null || !(this.mob.level() instanceof ServerLevel serverLevel)) return false;
@@ -66,11 +63,20 @@ public class TeamFollowCaptainGoal extends Goal {
         PlayerTeam captainCurrentTeam = TeamManager.getTeam(this.captain);
         if (captainCurrentTeam == null || !captainCurrentTeam.getName().equals(mobTeam.getName())) {
             if (debugCooldown == 0) {
-                BetterMineTeam.debug("Captain {} is no longer in team {}!", captain.getName().getString(), mobTeam.getName());
+                BetterMineTeam.debug("Captain {} is no longer in team {}!", this.captain.getName().getString(), mobTeam.getName());
                 debugCooldown = 100;
             }
             return false;
         }
+
+        return true;
+    }
+
+    @Override
+    public boolean canUse() {
+        if (debugCooldown > 0) debugCooldown--;
+
+        if (!isFollowConditionMet()) return false;
 
         double distanceSqr = this.mob.distanceToSqr(this.captain);
         float effectiveStartDist = this.startDistance;
@@ -84,7 +90,18 @@ public class TeamFollowCaptainGoal extends Goal {
 
     @Override
     public boolean canContinueToUse() {
-        return this.captain != null && !this.navigation.isDone() && this.mob.distanceToSqr(this.captain) > (this.stopDistance * this.stopDistance);
+        // 实时检查 Follow 开关，关闭时立刻中断 Goal
+        if (!isFollowConditionMet()) return false;
+        if (this.navigation.isDone()) return false;
+
+        // 战斗让权：如果进入了战斗，且与队长距离没有过远，主动停止跟随，将移动权交给攻击 AI
+        if (this.mob.getTarget() != null && this.mob.getTarget().isAlive()) {
+            if (this.mob.distanceToSqr(this.captain) <= (this.combatStartDistance * this.combatStartDistance)) {
+                return false;
+            }
+        }
+
+        return this.mob.distanceToSqr(this.captain) > (this.stopDistance * this.stopDistance);
     }
 
     @Override
