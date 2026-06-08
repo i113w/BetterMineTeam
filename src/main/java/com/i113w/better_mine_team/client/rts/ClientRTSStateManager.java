@@ -1,0 +1,63 @@
+package com.i113w.better_mine_team.client.rts;
+
+import com.i113w.camera_lib.camera.RTSCameraController;
+
+public class ClientRTSStateManager {
+    public enum RTSMode {
+        CONTROL,
+        RECRUIT
+    }
+
+    private static final ClientRTSStateManager INSTANCE = new ClientRTSStateManager();
+
+    private RTSMode currentMode = RTSMode.CONTROL;
+    private int selectionRevision = 0;
+
+    private ClientRTSStateManager() {}
+
+    public static ClientRTSStateManager get() {
+        return INSTANCE;
+    }
+
+    public RTSMode getMode() {
+        return currentMode;
+    }
+
+    public void setMode(RTSMode mode) {
+        this.currentMode = mode;
+    }
+
+    public int getNextRevision() {
+        return ++selectionRevision;
+    }
+
+    public int getRevision() {
+        return selectionRevision;
+    }
+
+    public void enterCameraWithLastStyle() {
+        RTSCameraController controller = RTSCameraController.get();
+        if (!controller.isActive()) {
+            controller.enterMode(controller.getCameraStyle());
+        }
+    }
+
+    public void exitCamera() {
+        RTSCameraController controller = RTSCameraController.get();
+        if (controller.isActive()) {
+            controller.exitMode();
+        }
+    }
+
+    public void cycleCameraStyle() {
+        RTSCameraController controller = RTSCameraController.get();
+        if (controller.isActive()) {
+            controller.toggleCameraStyle();
+        }
+    }
+
+    public void reset() {
+        this.currentMode = RTSMode.CONTROL;
+        this.selectionRevision = 0;
+    }
+}

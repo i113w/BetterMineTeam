@@ -3,7 +3,7 @@ package com.i113w.better_mine_team.client.gui.screen;
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.client.gui.component.TeamMemberEntry;
 import com.i113w.better_mine_team.client.gui.component.TeamMemberList;
-import com.i113w.better_mine_team.client.rts.RTSCameraManager;
+import com.i113w.better_mine_team.client.rts.ClientRTSStateManager;
 import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import com.i113w.better_mine_team.common.team.TeamPermissions;
@@ -69,7 +69,8 @@ public class TeamManagementScreen extends Screen {
                             Component.translatable("better_mine_team.gui.btn.rts_mode"),
                             button -> {
                                 this.onClose();
-                                RTSCameraManager.get().toggleRTSMode(RTSCameraManager.RTSMode.CONTROL);
+                                ClientRTSStateManager.get().setMode(ClientRTSStateManager.RTSMode.CONTROL);
+                                ClientRTSStateManager.get().enterCameraWithLastStyle();
                             })
                     .bounds(btnX, btnY, 60, btnHeight)
                     .build());
@@ -80,7 +81,8 @@ public class TeamManagementScreen extends Screen {
                                 Component.translatable("better_mine_team.gui.btn.recruit"),
                                 button -> {
                                     this.onClose();
-                                    RTSCameraManager.get().toggleRTSMode(RTSCameraManager.RTSMode.RECRUIT);
+                                    ClientRTSStateManager.get().setMode(ClientRTSStateManager.RTSMode.RECRUIT);
+                                    ClientRTSStateManager.get().enterCameraWithLastStyle();
                                 })
                         .bounds(btnX, btnY, 60, btnHeight)
                         .build());

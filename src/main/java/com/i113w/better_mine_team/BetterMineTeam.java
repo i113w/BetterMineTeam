@@ -50,9 +50,9 @@ public class BetterMineTeam {
         // 配置加载/重载监听
         modEventBus.addListener(this::onConfigLoad);
         modEventBus.addListener(this::onConfigReload);
-        // RTS
-        ModEntities.register(modEventBus);
-        modEventBus.addListener(ClientSetup::registerEntityRenderers);
+
+        // ModEntities.register(modEventBus);
+        // modEventBus.addListener(ClientSetup::registerEntityRenderers);
 
         // 注册 /reload 监听器（Forge 总线）
         MinecraftForge.EVENT_BUS.addListener(this::onAddReloadListeners);
