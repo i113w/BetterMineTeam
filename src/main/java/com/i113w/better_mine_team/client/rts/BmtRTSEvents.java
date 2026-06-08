@@ -36,6 +36,9 @@ import java.util.Set;
 @EventBusSubscriber(modid = BetterMineTeam.MODID, value = Dist.CLIENT)
 public class BmtRTSEvents {
 
+    private static final int CAMERA_STYLE_BUTTON_WIDTH = 128;
+    private static final int CAMERA_STYLE_BUTTON_HEIGHT = 20;
+
     // ==========================================
     // 1. 库事件监听 (选区与指令)
     // ==========================================
@@ -161,15 +164,22 @@ public class BmtRTSEvents {
         event.getGuiGraphics().drawCenteredString(mc.font, "Exit RTS [ESC]", width / 2, btnY + 6, 0xFFFFFF);
 
         // 左下角相机模式切换按钮
-        int camBtnW = 90;
-        int camBtnH = 20;
+        int camBtnW = CAMERA_STYLE_BUTTON_WIDTH;
+        int camBtnH = CAMERA_STYLE_BUTTON_HEIGHT;
         int camBtnX = 10;
         int camBtnY = height - camBtnH - 10;
         event.getGuiGraphics().fill(camBtnX, camBtnY, camBtnX + camBtnW, camBtnY + camBtnH, 0x80000000);
 
-        // 判断当前相机是 RTS 还是 FREE 风格
-        String styleText = RTSCameraController.get().getCameraStyle().name().equals("RTS") ? "Camera: RTS" : "Camera: Free";
+        String styleText = getCameraStyleText();
         event.getGuiGraphics().drawCenteredString(mc.font, styleText, camBtnX + camBtnW / 2, camBtnY + 6, 0xFFFFFF);
+    }
+
+    private static String getCameraStyleText() {
+        return switch (RTSCameraController.get().getCameraStyle()) {
+            case RTS -> "Camera: RTS";
+            case FREE -> "Camera: Free";
+            case ORTHOGRAPHIC -> "Camera: Orthographic";
+        };
     }
 
     @SubscribeEvent
@@ -189,7 +199,7 @@ public class BmtRTSEvents {
             int btnW = 80, btnH = 20, btnX = width / 2 - btnW / 2, btnY = 10;
             if (mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH) {
                 // 退出摄像机
-                RTSCameraController.get().toggleRTSMode();
+                BmtRTSManager.exitCamera();
                 ClientSelectionManager.clear();
                 ClientSelectionManager.syncToLib();
                 syncSelectionToServer();
@@ -198,10 +208,10 @@ public class BmtRTSEvents {
             }
 
             // 切换相机风格按钮判定
-            int camBtnW = 90, camBtnH = 20, camBtnX = 10, camBtnY = height - camBtnH - 10;
+            int camBtnW = CAMERA_STYLE_BUTTON_WIDTH, camBtnH = CAMERA_STYLE_BUTTON_HEIGHT, camBtnX = 10, camBtnY = height - camBtnH - 10;
             if (mx >= camBtnX && mx <= camBtnX + camBtnW && my >= camBtnY && my <= camBtnY + camBtnH) {
                 // 切换摄像机风格
-                RTSCameraController.get().toggleCameraStyle();
+                BmtRTSManager.cycleCameraStyle();
                 event.setCanceled(true); // 拦截事件
                 return;
             }

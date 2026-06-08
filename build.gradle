@@ -127,7 +127,7 @@ dependencies {
 
     compileOnly "curse.maven:irons-spells-n-spellbooks-855414:7605616"
 
-    // implementation files('libs/i113w_camera_lib-0.0.1.jar')
+    // implementation files('libs/i113w_camera_lib-0.0.3-alpha1.jar')
     implementation "curse.maven:i113w-camera-lib-${project.i113w_camera_lib_project_id}:${project.i113w_camera_lib_file_id}"
 }
 
