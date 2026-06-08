@@ -46,8 +46,9 @@ public class BetterMineTeam {
 
         // 将屏幕注册移动到 if (CLIENT) 代码块内部
         if (FMLEnvironment.dist == Dist.CLIENT) {
+            modEventBus.addListener(ClientSetup::onClientSetup);
             modEventBus.addListener(ClientSetup::registerScreens);
-            modEventBus.addListener(ClientSetup::registerEntityRenderers);
+            // modEventBus.addListener(ClientSetup::registerEntityRenderers);
             modEventBus.addListener(ModKeyMappings::onRegisterKeyMappings);
         }
         modEventBus.addListener(this::onConfigLoad);

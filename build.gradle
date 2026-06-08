@@ -126,6 +126,9 @@ dependencies {
     compileOnly "tschipp.carryon:carryon-neoforge-1.21.1:2.2.4.4"
 
     compileOnly "curse.maven:irons-spells-n-spellbooks-855414:7605616"
+
+    // implementation files('libs/i113w_camera_lib-0.0.1.jar')
+    implementation "curse.maven:i113w-camera-lib-${project.i113w_camera_lib_project_id}:${project.i113w_camera_lib_file_id}"
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.

@@ -3,10 +3,11 @@ package com.i113w.better_mine_team.client.gui.screen;
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.client.gui.component.TeamMemberEntry;
 import com.i113w.better_mine_team.client.gui.component.TeamMemberList;
-import com.i113w.better_mine_team.client.rts.RTSCameraManager;
+import com.i113w.better_mine_team.client.rts.BmtRTSManager;
 import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import com.i113w.better_mine_team.common.team.TeamPermissions;
+import com.i113w.camera_lib.camera.RTSCameraController;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -72,7 +73,10 @@ public class TeamManagementScreen extends Screen {
             // 1. RTS 按钮
             this.addRenderableWidget(Button.builder(Component.translatable("better_mine_team.gui.btn.rts_mode"), button -> {
                         this.onClose();
-                        RTSCameraManager.get().toggleRTSMode(RTSCameraManager.RTSMode.CONTROL); // 进入指挥模式
+                        BmtRTSManager.setMode(BmtRTSManager.RTSMode.CONTROL);
+                        if (!RTSCameraController.get().isActive()) {
+                            RTSCameraController.get().toggleRTSMode();
+                        }
                     })
                     .bounds(btnX, btnY, 60, btnHeight)
                     .build());
@@ -82,7 +86,10 @@ public class TeamManagementScreen extends Screen {
             if (this.minecraft.player != null && TeamPermissions.hasOverridePermission(this.minecraft.player)) {
                 this.addRenderableWidget(Button.builder(Component.literal("Recruit"), button -> {
                             this.onClose();
-                            RTSCameraManager.get().toggleRTSMode(RTSCameraManager.RTSMode.RECRUIT);
+                            BmtRTSManager.setMode(BmtRTSManager.RTSMode.RECRUIT);
+                            if (!RTSCameraController.get().isActive()) {
+                                RTSCameraController.get().toggleRTSMode();
+                            }
                         })
                         .bounds(btnX, btnY, 60, btnHeight)
                         .build());

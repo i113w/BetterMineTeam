@@ -2,6 +2,7 @@ package com.i113w.better_mine_team.client.gui.component;
 
 import com.i113w.better_mine_team.client.gui.asset.MTGuiIcons;
 import com.i113w.better_mine_team.client.manager.ClientSelectionManager;
+import com.i113w.better_mine_team.client.rts.BmtRTSEvents;
 import com.i113w.better_mine_team.common.network.TeamManagementPayload;
 import com.i113w.better_mine_team.common.team.TeamDataStorage;
 import com.i113w.better_mine_team.common.team.TeamManager;
@@ -176,15 +177,16 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
         // 如果没有点到按钮，且点击在条目范围内
         // 逻辑：发送 OPEN_INVENTORY 包，服务端会打开 EntityDetailsMenu
         // 注意：如果是玩家队友，目前服务端逻辑是打开末影箱，如果是生物队友，打开新界面
-        if (!isMe) { // 不能查看自己的详情(或者可以？看需求，通常按E就行)
+        if (!isMe) {
             PacketDistributor.sendToServer(new TeamManagementPayload(TeamManagementPayload.ACTION_OPEN_INVENTORY, member.getId(), ""));
-            // 同时处理选中逻辑
             if (Screen.hasShiftDown()) {
                 ClientSelectionManager.select(member.getId());
             } else {
                 ClientSelectionManager.clear();
                 ClientSelectionManager.select(member.getId());
             }
+            ClientSelectionManager.syncToLib();
+            BmtRTSEvents.syncSelectionToServer();
             return true;
         }
 
