@@ -20,9 +20,9 @@ public class RTSHudRenderer {
 
     @SubscribeEvent
     public static void onRenderGui(RenderGuiEvent.Post event) {
-        if (!RTSCameraController.get().isActive()) return;
-
         Minecraft mc = Minecraft.getInstance();
+        if (!RTSCameraController.get().isActive() || mc.options.hideGui) return;
+
         int width = mc.getWindow().getGuiScaledWidth();
         int height = mc.getWindow().getGuiScaledHeight();
 

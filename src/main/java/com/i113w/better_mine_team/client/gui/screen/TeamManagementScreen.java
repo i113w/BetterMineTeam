@@ -1,10 +1,13 @@
 package com.i113w.better_mine_team.client.gui.screen;
 
 import com.i113w.better_mine_team.BetterMineTeam;
+import com.i113w.better_mine_team.client.gui.ClientTeamUiState;
 import com.i113w.better_mine_team.client.gui.component.TeamMemberEntry;
 import com.i113w.better_mine_team.client.gui.component.TeamMemberList;
 import com.i113w.better_mine_team.client.rts.ClientRTSStateManager;
 import com.i113w.better_mine_team.common.config.BMTConfig;
+import com.i113w.better_mine_team.common.init.MTNetworkRegister;
+import com.i113w.better_mine_team.common.network.TeamManagementPacket;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import com.i113w.better_mine_team.common.team.TeamPermissions;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -42,6 +45,7 @@ public class TeamManagementScreen extends Screen {
     private int guiTop;
 
     private TeamMemberList memberList;
+    private Button teamGlowButton;
 
     public TeamManagementScreen() {
         super(Component.translatable("better_mine_team.gui.title.management"));
@@ -57,6 +61,7 @@ public class TeamManagementScreen extends Screen {
         this.memberList = new TeamMemberList(this.minecraft, this.guiLeft, this.guiTop);
         refreshMembers();
         this.addRenderableWidget(this.memberList);
+        requestCaptainStatus();
 
         int btnX = this.guiLeft + CONTENT_WIDTH + 4;
         int btnY = this.guiTop;
@@ -89,6 +94,13 @@ public class TeamManagementScreen extends Screen {
                 btnY += btnHeight + spacing;
             }
         }
+
+        this.teamGlowButton = Button.builder(getTeamGlowButtonText(), button -> toggleTeamGlow())
+                .bounds(btnX, btnY, 60, btnHeight)
+                .build();
+        this.addRenderableWidget(this.teamGlowButton);
+        refreshTeamGlowButton();
+        btnY += btnHeight + spacing;
 
         // Close 按钮
         this.addRenderableWidget(Button.builder(
@@ -240,7 +252,72 @@ public class TeamManagementScreen extends Screen {
         if (this.tickCounter >= 10) {
             this.tickCounter = 0;
             refreshMembers();
+            refreshTeamGlowButton();
         }
+    }
+
+    private void toggleTeamGlow() {
+        if (this.minecraft == null || this.minecraft.player == null) return;
+        if (!isLocalPlayerCaptain() || !ClientTeamUiState.tryMarkGlowClick()) return;
+
+        boolean newState = shouldEnableTeamGlow();
+        applyVisibleTeamGlow(newState);
+        refreshTeamGlowButton();
+        MTNetworkRegister.CHANNEL.sendToServer(new TeamManagementPacket(
+                TeamManagementPacket.ACTION_SET_TEAM_GLOW,
+                this.minecraft.player.getId(),
+                String.valueOf(newState)));
+    }
+
+    public void refreshGlowControls() {
+        refreshTeamGlowButton();
+    }
+
+    private void refreshTeamGlowButton() {
+        if (this.teamGlowButton != null) {
+            this.teamGlowButton.active = isLocalPlayerCaptain();
+            this.teamGlowButton.setMessage(getTeamGlowButtonText());
+        }
+    }
+
+    private Component getTeamGlowButtonText() {
+        return Component.translatable(shouldEnableTeamGlow()
+                ? "better_mine_team.gui.btn.team_glow_on"
+                : "better_mine_team.gui.btn.team_glow_off");
+    }
+
+    private boolean shouldEnableTeamGlow() {
+        if (this.memberList == null) return true;
+        for (TeamMemberEntry entry : this.memberList.getEntries()) {
+            LivingEntity member = entry.getMember();
+            if (!(member instanceof Player) && member.isAlive() && !TeamManager.isGlowEnabled(member)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void applyVisibleTeamGlow(boolean enabled) {
+        if (this.memberList == null) return;
+        for (TeamMemberEntry entry : this.memberList.getEntries()) {
+            LivingEntity member = entry.getMember();
+            if (!(member instanceof Player) && member.isAlive()) {
+                ClientTeamUiState.setClientGlowState(member, enabled);
+            }
+        }
+    }
+
+    private void requestCaptainStatus() {
+        if (this.minecraft == null || this.minecraft.player == null) return;
+        ClientTeamUiState.setLocalPlayerCaptain(this.minecraft.player, false);
+        MTNetworkRegister.CHANNEL.sendToServer(new TeamManagementPacket(
+                TeamManagementPacket.ACTION_REQUEST_CAPTAIN_STATUS,
+                this.minecraft.player.getId(),
+                ""));
+    }
+
+    private boolean isLocalPlayerCaptain() {
+        return this.minecraft != null && ClientTeamUiState.isLocalPlayerCaptain(this.minecraft.player);
     }
 
     @Override

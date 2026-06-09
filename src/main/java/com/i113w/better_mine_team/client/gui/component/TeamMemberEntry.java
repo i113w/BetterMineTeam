@@ -1,9 +1,11 @@
 package com.i113w.better_mine_team.client.gui.component;
 
+import com.i113w.better_mine_team.client.gui.ClientTeamUiState;
 import com.i113w.better_mine_team.client.gui.asset.MTGuiIcons;
 import com.i113w.better_mine_team.client.manager.ClientSelectionManager;
 import com.i113w.better_mine_team.common.init.MTNetworkRegister;
 import com.i113w.better_mine_team.common.network.TeamManagementPacket;
+import com.i113w.better_mine_team.common.team.TeamManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.ObjectSelectionList;
@@ -11,6 +13,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
 public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> {
@@ -71,6 +74,13 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
 
             renderMappedButton(gfx, startX, btnY, mouseX, mouseY, MTGuiIcons.ICON_KICK);
 
+            if (!(member instanceof Player)) {
+                startX -= BTN_SPACING;
+                boolean glowEnabled = TeamManager.isGlowEnabled(member);
+                renderItemButton(gfx, startX, btnY, mouseX, mouseY,
+                        ClientTeamUiState.getLightIcon(glowEnabled), glowEnabled);
+            }
+
             if (member instanceof Player) {
                 startX -= BTN_SPACING;
                 renderMappedButton(gfx, startX, btnY, mouseX, mouseY, MTGuiIcons.ICON_CAPTAIN);
@@ -79,8 +89,7 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
     }
 
     private boolean isCaptain(Player player) {
-        if (player == null) return false;
-        return true;
+        return ClientTeamUiState.isLocalPlayerCaptain(player);
     }
 
     private void renderMappedButton(GuiGraphics gfx, int x, int y, int mouseX, int mouseY, MTGuiIcons icon) {
@@ -91,6 +100,19 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
             MTGuiIcons.BUTTON_NORMAL.render(gfx, x, y);
         }
         icon.render(gfx, x + 2, y + 2);
+    }
+
+    private void renderItemButton(GuiGraphics gfx, int x, int y, int mouseX, int mouseY, ItemStack itemStack, boolean active) {
+        boolean hovered = mouseX >= x && mouseX < x + BTN_SIZE && mouseY >= y && mouseY < y + BTN_SIZE;
+        if (active) {
+            gfx.fill(x - 1, y - 1, x + BTN_SIZE + 1, y + BTN_SIZE + 1, 0xFFFFD700);
+        }
+        if (hovered) {
+            MTGuiIcons.BUTTON_HOVER.render(gfx, x, y);
+        } else {
+            MTGuiIcons.BUTTON_NORMAL.render(gfx, x, y);
+        }
+        gfx.renderItem(itemStack, x + 2, y + 2);
     }
 
     @Override
@@ -107,6 +129,18 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
                 // Forge 1.20.1 网络发送方式
                 MTNetworkRegister.CHANNEL.sendToServer(
                         new TeamManagementPacket(TeamManagementPacket.ACTION_KICK, member.getId(), "")
+                );
+                return true;
+            }
+
+            if (!(member instanceof Player) && distFromRight >= 26 && distFromRight <= 46) {
+                if (!ClientTeamUiState.tryMarkGlowClick()) {
+                    return true;
+                }
+                boolean newState = !TeamManager.isGlowEnabled(member);
+                ClientTeamUiState.setClientGlowState(member, newState);
+                MTNetworkRegister.CHANNEL.sendToServer(
+                        new TeamManagementPacket(TeamManagementPacket.ACTION_SET_GLOW, member.getId(), String.valueOf(newState))
                 );
                 return true;
             }

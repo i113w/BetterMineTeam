@@ -1,9 +1,12 @@
 package com.i113w.better_mine_team.client.gui.screen;
 
 import com.i113w.better_mine_team.BetterMineTeam;
+import com.i113w.better_mine_team.client.gui.ClientTeamUiState;
 import com.i113w.better_mine_team.client.gui.asset.MTGuiIcons;
+import com.i113w.better_mine_team.common.init.MTNetworkRegister;
 import com.i113w.better_mine_team.common.menu.EntityDetailsMenu;
 import com.i113w.better_mine_team.common.network.TeamManagementPacket;
+import com.i113w.better_mine_team.common.team.TeamManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -15,6 +18,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -43,6 +47,7 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
     private EditBox nameField;
     private boolean isRenaming = false;
     private IconButton followButton;
+    @Nullable private IconButton glowButton;
 
     public EntityDetailsScreen(EntityDetailsMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);
@@ -67,6 +72,8 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         this.nameField.setVisible(false);
         this.nameField.setValue(this.menu.getTargetEntity().getDisplayName().getString());
         this.addRenderableWidget(this.nameField);
+
+        requestCaptainStatus();
 
         int btnX = this.leftPos + 7;
         int btnY = this.topPos + 130;
@@ -100,6 +107,17 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         this.addRenderableWidget(this.aggressiveBtn1);
         this.addRenderableWidget(this.aggressiveBtn2);
 
+        if (!(this.menu.getTargetEntity() instanceof Player)) {
+            this.glowButton = new IconButton(
+                    btnX + spacing * 2, aggrBtnY + spacing,
+                    ClientTeamUiState.getLightIcon(TeamManager.isGlowEnabled(this.menu.getTargetEntity())),
+                    (btn) -> onGlowToggle(),
+                    Component.translatable("better_mine_team.gui.tooltip.glow")
+            );
+            this.addRenderableWidget(this.glowButton);
+            updateGlowButtonState();
+        }
+
         // 请求服务端当前等级
         sendAction(TeamManagementPacket.ACTION_GET_AGGRESSIVE_LEVEL, "");
     }
@@ -122,12 +140,36 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
     public void containerTick() {
         super.containerTick();
         updateFollowButtonState();
+        updateGlowButtonState();
     }
 
     private void updateFollowButtonState() {
         if (this.menu.getTargetEntity() == null) return;
         boolean isFollowing = this.menu.getTargetEntity().getPersistentData().getBoolean("bmt_follow_enabled");
         this.followButton.setIcon(isFollowing ? MTGuiIcons.ICON_FOLLOW_ON : MTGuiIcons.ICON_FOLLOW_OFF);
+    }
+
+    private void updateGlowButtonState() {
+        if (this.menu.getTargetEntity() == null || this.glowButton == null) return;
+        boolean glowEnabled = TeamManager.isGlowEnabled(this.menu.getTargetEntity());
+        this.glowButton.active = isLocalPlayerCaptain();
+        this.glowButton.setHighlighted(glowEnabled);
+        this.glowButton.setItemStack(ClientTeamUiState.getLightIcon(glowEnabled));
+    }
+
+    private void onGlowToggle() {
+        LivingEntity target = this.menu.getTargetEntity();
+        if (target == null) return;
+        if (!isLocalPlayerCaptain() || !ClientTeamUiState.tryMarkGlowClick()) return;
+
+        boolean newState = !TeamManager.isGlowEnabled(target);
+        ClientTeamUiState.setClientGlowState(target, newState);
+        updateGlowButtonState();
+        sendAction(TeamManagementPacket.ACTION_SET_GLOW, String.valueOf(newState));
+    }
+
+    public void refreshGlowControls() {
+        updateGlowButtonState();
     }
 
     private void toggleRenameMode() {
@@ -158,6 +200,19 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
                         data
                 )
         );
+    }
+
+    private void requestCaptainStatus() {
+        if (this.minecraft == null || this.minecraft.player == null) return;
+        ClientTeamUiState.setLocalPlayerCaptain(this.minecraft.player, false);
+        MTNetworkRegister.CHANNEL.sendToServer(new TeamManagementPacket(
+                TeamManagementPacket.ACTION_REQUEST_CAPTAIN_STATUS,
+                this.minecraft.player.getId(),
+                ""));
+    }
+
+    private boolean isLocalPlayerCaptain() {
+        return this.minecraft != null && ClientTeamUiState.isLocalPlayerCaptain(this.minecraft.player);
     }
 
     // 辅助方法：将 String key 自动转为 Component 传入 IconButton
@@ -288,6 +343,13 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
             this.setTooltip(Tooltip.create(tooltip));
         }
 
+        protected IconButton(int x, int y, ItemStack itemStack, OnPress onPress, Component tooltip) {
+            super(x, y, 20, 20, Component.empty(), onPress, DEFAULT_NARRATION);
+            this.icon = null;
+            this.itemStack = itemStack;
+            this.setTooltip(Tooltip.create(tooltip));
+        }
+
         public IconButton setIconOffset(int offsetX, int offsetY) {
             this.iconOffsetX = offsetX;
             this.iconOffsetY = offsetY;
@@ -297,6 +359,11 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         public void setIcon(MTGuiIcons newIcon) {
             this.icon = newIcon;
             this.itemStack = ItemStack.EMPTY;
+        }
+
+        public void setItemStack(ItemStack newItemStack) {
+            this.itemStack = newItemStack;
+            this.icon = null;
         }
 
         public void setHighlighted(boolean highlighted) {

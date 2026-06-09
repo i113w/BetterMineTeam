@@ -8,6 +8,7 @@ import com.i113w.better_mine_team.client.rts.BMTInteractionDelegate;
 import com.i113w.better_mine_team.client.rts.ClientRTSStateManager;
 import com.i113w.better_mine_team.common.registry.ModMenuTypes;
 import com.i113w.camera_lib.api.CameraLibAPI;
+import com.i113w.camera_lib.camera.RTSCameraController;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraftforge.api.distmarker.Dist;
@@ -46,6 +47,8 @@ class ClientForgeEvents {
     public static void onKeyInput(InputEvent.Key event) {
         while (ModKeyMappings.OPEN_TEAM_MENU.consumeClick()) {
             Minecraft mc = Minecraft.getInstance();
+            if (RTSCameraController.get().isActive()) continue;
+
             if (mc.player != null && mc.level != null && mc.screen == null) {
                 mc.setScreen(new TeamManagementScreen());
             }

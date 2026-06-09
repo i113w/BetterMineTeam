@@ -9,6 +9,7 @@ import com.i113w.better_mine_team.common.team.TeamPermissions;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
@@ -30,6 +31,8 @@ import java.util.function.Supplier;
  */
 public class TeamManagementPacket {
     // 动作常量
+    public static final String TAG_CLIENT_IS_CAPTAIN = "bmt_is_team_captain";
+
     public static final int ACTION_TELEPORT = 1;
     public static final int ACTION_TOGGLE_FOLLOW = 2;
     public static final int ACTION_KICK = 3;
@@ -39,6 +42,11 @@ public class TeamManagementPacket {
     public static final int ACTION_SYNC_FOLLOW_STATE = 7;
     public static final int ACTION_SET_AGGRESSIVE_LEVEL = 8;
     public static final int ACTION_GET_AGGRESSIVE_LEVEL = 9;
+    public static final int ACTION_SET_GLOW = 10;
+    public static final int ACTION_SYNC_GLOW_STATE = 11;
+    public static final int ACTION_SET_TEAM_GLOW = 12;
+    public static final int ACTION_REQUEST_CAPTAIN_STATUS = 13;
+    public static final int ACTION_SYNC_CAPTAIN_STATUS = 14;
 
     private final int actionType;
     private final int targetEntityId;
@@ -84,11 +92,17 @@ public class TeamManagementPacket {
         if (player == null) return;
 
         ServerLevel level = player.serverLevel();
-        Entity target = level.getEntity(msg.targetEntityId);
+        PlayerTeam playerTeam = TeamManager.getTeam(player);
 
+        if (msg.actionType == ACTION_REQUEST_CAPTAIN_STATUS) {
+            boolean isCaptain = playerTeam != null && TeamDataStorage.get(level).isCaptain(player);
+            syncCaptainStatus(player, isCaptain);
+            return;
+        }
+
+        Entity target = level.getEntity(msg.targetEntityId);
         if (target == null || target.isRemoved()) return;
 
-        PlayerTeam playerTeam = TeamManager.getTeam(player);
         PlayerTeam targetTeam = TeamManager.getTeam(target);
 
         if (playerTeam == null || targetTeam == null || !playerTeam.getName().equals(targetTeam.getName())) {
@@ -132,7 +146,7 @@ public class TeamManagementPacket {
                     if (target instanceof LivingEntity living) {
                         Scoreboard scoreboard = level.getScoreboard();
                         scoreboard.removePlayerFromTeam(living.getStringUUID(), targetTeam);
-                        living.setGlowingTag(false);
+                        TeamManager.clearGlowState(living);
                         living.getPersistentData().remove("bmt_follow_enabled");
                     }
                 }
@@ -148,7 +162,18 @@ public class TeamManagementPacket {
                 case ACTION_SET_CAPTAIN -> {
                     if (!isCaptain) { sendPermissionError(player); return; }
                     if (target instanceof ServerPlayer targetPlayer) {
-                        TeamDataStorage.get(level).setCaptain(playerTeam.getName(), targetPlayer.getUUID());
+                        TeamDataStorage storage = TeamDataStorage.get(level);
+                        java.util.UUID oldCaptainId = storage.getCaptain(playerTeam.getName());
+                        storage.setCaptain(playerTeam.getName(), targetPlayer.getUUID());
+
+                        if (oldCaptainId != null && !oldCaptainId.equals(targetPlayer.getUUID())) {
+                            ServerPlayer oldCaptain = player.getServer().getPlayerList().getPlayer(oldCaptainId);
+                            if (oldCaptain != null) {
+                                syncCaptainStatus(oldCaptain, false);
+                            }
+                        }
+                        syncCaptainStatus(targetPlayer, true);
+
                         player.displayClientMessage(Component.translatable("better_mine_team.msg.captain_transferred", targetPlayer.getName()), true);
                     }
                 }
@@ -185,6 +210,11 @@ public class TeamManagementPacket {
                                 new TeamManagementPacket(ACTION_GET_AGGRESSIVE_LEVEL, livingTarget.getId(), String.valueOf(aggrLevel))
                         );
 
+                        com.i113w.better_mine_team.common.init.MTNetworkRegister.CHANNEL.send(
+                                net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
+                                new TeamManagementPacket(ACTION_SYNC_GLOW_STATE, livingTarget.getId(), String.valueOf(TeamManager.isGlowEnabled(livingTarget)))
+                        );
+
                         NetworkHooks.openScreen(
                                 player,
                                 new SimpleMenuProvider(
@@ -198,6 +228,26 @@ public class TeamManagementPacket {
                                 }
                         );
                     }
+                }
+                case ACTION_SET_GLOW -> {
+                    if (!isCaptain) { sendPermissionError(player); return; }
+                    if (!(target instanceof LivingEntity livingTarget) || !livingTarget.isAlive()) return;
+
+                    boolean newState = Boolean.parseBoolean(msg.extraData);
+                    TeamManager.setGlowEnabled(livingTarget, newState);
+                    syncGlowState(livingTarget);
+
+                    player.displayClientMessage(Component.translatable(newState ? "better_mine_team.msg.glow_enabled" : "better_mine_team.msg.glow_disabled"), true);
+                }
+                case ACTION_SET_TEAM_GLOW -> {
+                    if (!isCaptain) { sendPermissionError(player); return; }
+
+                    boolean newState = Boolean.parseBoolean(msg.extraData);
+                    int changedCount = TeamManager.setTeamGlowEnabled(player.getServer(), playerTeam, newState);
+                    syncTeamGlowState(player.getServer(), playerTeam);
+                    player.displayClientMessage(Component.translatable(
+                            newState ? "better_mine_team.msg.team_glow_enabled" : "better_mine_team.msg.team_glow_disabled",
+                            changedCount), true);
                 }
                 case ACTION_SET_AGGRESSIVE_LEVEL -> {
                     if (!isCaptain) { sendPermissionError(player); return; }
@@ -253,6 +303,20 @@ public class TeamManagementPacket {
                     entity.getPersistentData().putBoolean("bmt_follow_enabled", newState);
                 }
             }
+            else if (msg.actionType == ACTION_SYNC_GLOW_STATE) {
+                Entity entity = player.level().getEntity(msg.targetEntityId);
+                if (entity instanceof LivingEntity living) {
+                    boolean newState = Boolean.parseBoolean(msg.extraData);
+                    living.setGlowingTag(newState);
+                    living.getPersistentData().putBoolean(TeamManager.TAG_GLOW_ENABLED, newState);
+                    refreshOpenGlowControls();
+                }
+            }
+            else if (msg.actionType == ACTION_SYNC_CAPTAIN_STATUS) {
+                boolean isCaptain = Boolean.parseBoolean(msg.extraData);
+                player.getPersistentData().putBoolean(TAG_CLIENT_IS_CAPTAIN, isCaptain);
+                refreshOpenGlowControls();
+            }
             else if (msg.actionType == ACTION_GET_AGGRESSIVE_LEVEL) {
                 // 通知当前打开的屏幕更新 UI
                 int level2 = Mth.clamp(Integer.parseInt(msg.extraData), 0, 2);
@@ -261,5 +325,37 @@ public class TeamManagementPacket {
                 }
             }
         }
+
+        private static void refreshOpenGlowControls() {
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+            if (mc.screen instanceof com.i113w.better_mine_team.client.gui.screen.TeamManagementScreen screen) {
+                screen.refreshGlowControls();
+            } else if (mc.screen instanceof com.i113w.better_mine_team.client.gui.screen.EntityDetailsScreen screen) {
+                screen.refreshGlowControls();
+            }
+        }
+    }
+
+    private static void syncGlowState(LivingEntity entity) {
+        com.i113w.better_mine_team.common.init.MTNetworkRegister.CHANNEL.send(
+                net.minecraftforge.network.PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> entity),
+                new TeamManagementPacket(ACTION_SYNC_GLOW_STATE, entity.getId(), String.valueOf(TeamManager.isGlowEnabled(entity)))
+        );
+    }
+
+    private static void syncTeamGlowState(MinecraftServer server, PlayerTeam team) {
+        if (server == null || team == null) return;
+        for (LivingEntity member : TeamManager.getLoadedTeamMembers(server, team)) {
+            if (!(member instanceof net.minecraft.world.entity.player.Player)) {
+                syncGlowState(member);
+            }
+        }
+    }
+
+    private static void syncCaptainStatus(ServerPlayer player, boolean isCaptain) {
+        com.i113w.better_mine_team.common.init.MTNetworkRegister.CHANNEL.send(
+                net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
+                new TeamManagementPacket(ACTION_SYNC_CAPTAIN_STATUS, player.getId(), String.valueOf(isCaptain))
+        );
     }
 }

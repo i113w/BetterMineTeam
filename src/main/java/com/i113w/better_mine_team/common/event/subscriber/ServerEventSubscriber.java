@@ -32,6 +32,7 @@ public class ServerEventSubscriber {
         // 每 5 秒 (100 ticks) 清理一次过期仇恨数据
         if (server.getTickCount() % 100 == 0) {
             TeamManager.cleanupExpiredHateData(server);
+            TeamManager.syncLoadedTeamMemberGlow(server);
         }
     }
 

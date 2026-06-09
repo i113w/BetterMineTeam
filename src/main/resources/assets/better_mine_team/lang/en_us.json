@@ -49,5 +49,12 @@
 "better_mine_team.msg.cmd_ack": "command is sent to %s units",
 "better_mine_team.msg.recruit_success": "successfully recruit %s mobs",
 "better_mine_team.msg.recruit_fail_no_target": "no units available for recruiting",
-"better_mine_team.msg.details_blacklisted": "The server has disabled panel interaction for this entity"
+"better_mine_team.msg.details_blacklisted": "The server has disabled panel interaction for this entity",
+"better_mine_team.gui.tooltip.glow": "Toggle Glow",
+"better_mine_team.gui.btn.team_glow_on": "Glow On",
+"better_mine_team.gui.btn.team_glow_off": "Glow Off",
+"better_mine_team.msg.glow_enabled": "Glow: ON",
+"better_mine_team.msg.glow_disabled": "Glow: OFF",
+"better_mine_team.msg.team_glow_enabled": "Glow enabled for %s teammates",
+"better_mine_team.msg.team_glow_disabled": "Glow disabled for %s teammates"
 }

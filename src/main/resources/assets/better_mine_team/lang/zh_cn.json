@@ -49,5 +49,12 @@
 "better_mine_team.msg.cmd_ack": "已向 %s 个单位发出指令",
 "better_mine_team.msg.recruit_success": "成功征召 %s 个生物",
 "better_mine_team.msg.recruit_fail_no_target": "没有可征召的目标",
-"better_mine_team.msg.details_blacklisted": "服务器已禁用该生物的面板交互"
+"better_mine_team.msg.details_blacklisted": "服务器已禁用该生物的面板交互",
+"better_mine_team.gui.tooltip.glow": "切换发光",
+"better_mine_team.gui.btn.team_glow_on": "发光开",
+"better_mine_team.gui.btn.team_glow_off": "发光关",
+"better_mine_team.msg.glow_enabled": "发光: 开启",
+"better_mine_team.msg.glow_disabled": "发光: 关闭",
+"better_mine_team.msg.team_glow_enabled": "已为 %s 个队友开启发光",
+"better_mine_team.msg.team_glow_disabled": "已为 %s 个队友关闭发光"
 }

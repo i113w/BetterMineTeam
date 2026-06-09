@@ -41,6 +41,7 @@ public class BMTConfig {
 
     // Follow & Teleport
     private static final ForgeConfigSpec.BooleanValue defaultFollowState;
+    private static final ForgeConfigSpec.BooleanValue defaultGlowState;
     private static final ForgeConfigSpec.BooleanValue enableFollowTeleport;
     private static final ForgeConfigSpec.DoubleValue followTeleportDistance;
 
@@ -121,6 +122,7 @@ public class BMTConfig {
         guardFollowStopDist = builder.comment("Distance at which the entity stops following the captain.").defineInRange("guardFollowStopDist", 2.0, 1.0, 16.0);
         followPathFailThreshold = builder.comment("How many failed pathfinding attempts before using direct movement. Lower values make mobs 'stuck' less often but might cause clipping through walls.").defineInRange("followPathFailThreshold", 5, 1, 20);
         defaultFollowState = builder.comment("Whether mobs should default to 'Follow' mode when joining a team.").define("defaultFollowState", false);
+        defaultGlowState = builder.comment("Whether non-player entities should glow by default when joining a team.").define("defaultGlowState", true);
         enableFollowTeleport = builder.comment("Whether mobs should automatically teleport to the captain when too far away (like vanilla pets).").define("enableFollowTeleport", true);
         followTeleportDistance = builder.comment("The distance (in blocks) at which a mob will teleport to the captain.").defineInRange("followTeleportDistance", 24.0, 5.0, 128.0);
         attackCommitmentHardTicks = builder.comment("Duration (in ticks) of the HARD commitment phase after a mob locks onto a target.").defineInRange("attackCommitmentHardTicks", 20, 0, 200);
@@ -298,6 +300,7 @@ public class BMTConfig {
     public static int getFollowPathFailThreshold() { return followPathFailThreshold.get(); }
 
     public static boolean getDefaultFollowState() { return defaultFollowState.get(); }
+    public static boolean getDefaultGlowState() { return defaultGlowState.get(); }
     public static boolean isFollowTeleportEnabled() { return enableFollowTeleport.get(); }
     public static double getFollowTeleportDistanceSqr() { double dist = followTeleportDistance.get(); return dist * dist; }
 

@@ -228,7 +228,7 @@ public class ServerPacketHandler {
 
             MobTeamEventSubscriber.setupTeamAI(mob);
 
-            mob.setGlowingTag(true);
+            TeamManager.syncGlowWithTeamDefault(mob);
             successCount++;
         }
 

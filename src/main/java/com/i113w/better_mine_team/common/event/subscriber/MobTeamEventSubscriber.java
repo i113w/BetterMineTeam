@@ -111,6 +111,7 @@ public class MobTeamEventSubscriber {
         if (event.getEntity() instanceof Mob mob) {
             if (TeamManager.getTeam(mob) != null) {
                 setupTeamAI(mob);
+                TeamManager.syncGlowWithTeamDefault(mob);
             }
         }
     }
@@ -173,7 +174,7 @@ public class MobTeamEventSubscriber {
                         setupTeamAI(mob);
                     }
 
-                    livingEntity.setGlowingTag(true);
+                    TeamManager.syncGlowWithTeamDefault(livingEntity);
 
                     event.setCanceled(true);
                     event.setCancellationResult(InteractionResult.SUCCESS);
@@ -204,7 +205,7 @@ public class MobTeamEventSubscriber {
             }
         }
 
-        summon.setGlowingTag(true);
+        TeamManager.syncGlowWithTeamDefault(summon);
         summon.getPersistentData().putBoolean("bmt_summoned", true);
 
         summon.getPersistentData().putBoolean("bmt_follow_enabled", BMTConfig.getDefaultFollowState());
@@ -297,7 +298,7 @@ public class MobTeamEventSubscriber {
                         true
                 );
 
-                dragon.setGlowingTag(true);
+                TeamManager.syncGlowWithTeamDefault(dragon);
                 event.setCanceled(true);
                 event.setCancellationResult(InteractionResult.SUCCESS);
             }
