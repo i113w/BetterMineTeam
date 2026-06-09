@@ -8,7 +8,11 @@ public class BmtRTSManager {
         RECRUIT
     }
 
+    private static final RTSCameraController.CameraStyle DEFAULT_CAMERA_STYLE =
+            RTSCameraController.CameraStyle.ORTHOGRAPHIC;
+
     private static RTSMode currentMode = RTSMode.CONTROL;
+    private static RTSCameraController.CameraStyle lastCameraStyle = DEFAULT_CAMERA_STYLE;
 
     public static void setMode(RTSMode mode) {
         currentMode = mode;
@@ -21,13 +25,14 @@ public class BmtRTSManager {
     public static void enterCameraWithLastStyle() {
         RTSCameraController controller = RTSCameraController.get();
         if (!controller.isActive()) {
-            controller.enterMode(controller.getCameraStyle());
+            controller.enterMode(lastCameraStyle);
         }
     }
 
     public static void exitCamera() {
         RTSCameraController controller = RTSCameraController.get();
         if (controller.isActive()) {
+            lastCameraStyle = controller.getCameraStyle();
             controller.exitMode();
         }
     }
@@ -36,6 +41,12 @@ public class BmtRTSManager {
         RTSCameraController controller = RTSCameraController.get();
         if (controller.isActive()) {
             controller.toggleCameraStyle();
+            lastCameraStyle = controller.getCameraStyle();
         }
+    }
+
+    public static void reset() {
+        currentMode = RTSMode.CONTROL;
+        lastCameraStyle = DEFAULT_CAMERA_STYLE;
     }
 }

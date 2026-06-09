@@ -31,6 +31,6 @@ public class ClientSetup {
         ClientSelectionManager.clear();
         ClientSelectionManager.syncToLib();
         RTSCameraController.get().reset();
-        BmtRTSManager.setMode(BmtRTSManager.RTSMode.CONTROL);
+        BmtRTSManager.reset();
     }
 }
