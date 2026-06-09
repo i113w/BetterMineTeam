@@ -9,8 +9,11 @@ public class ClientRTSStateManager {
     }
 
     private static final ClientRTSStateManager INSTANCE = new ClientRTSStateManager();
+    private static final RTSCameraController.CameraStyle DEFAULT_CAMERA_STYLE =
+            RTSCameraController.CameraStyle.ORTHOGRAPHIC;
 
     private RTSMode currentMode = RTSMode.CONTROL;
+    private RTSCameraController.CameraStyle lastCameraStyle = DEFAULT_CAMERA_STYLE;
     private int selectionRevision = 0;
 
     private ClientRTSStateManager() {}
@@ -38,13 +41,14 @@ public class ClientRTSStateManager {
     public void enterCameraWithLastStyle() {
         RTSCameraController controller = RTSCameraController.get();
         if (!controller.isActive()) {
-            controller.enterMode(controller.getCameraStyle());
+            controller.enterMode(lastCameraStyle);
         }
     }
 
     public void exitCamera() {
         RTSCameraController controller = RTSCameraController.get();
         if (controller.isActive()) {
+            lastCameraStyle = controller.getCameraStyle();
             controller.exitMode();
         }
     }
@@ -53,11 +57,13 @@ public class ClientRTSStateManager {
         RTSCameraController controller = RTSCameraController.get();
         if (controller.isActive()) {
             controller.toggleCameraStyle();
+            lastCameraStyle = controller.getCameraStyle();
         }
     }
 
     public void reset() {
         this.currentMode = RTSMode.CONTROL;
+        this.lastCameraStyle = DEFAULT_CAMERA_STYLE;
         this.selectionRevision = 0;
     }
 }
