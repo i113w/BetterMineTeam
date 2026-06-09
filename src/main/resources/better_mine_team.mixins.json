@@ -10,6 +10,7 @@
     "compat.carryon.PickupHandlerMixin"
   ],
   "client": [
+    "KeyboardHandlerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

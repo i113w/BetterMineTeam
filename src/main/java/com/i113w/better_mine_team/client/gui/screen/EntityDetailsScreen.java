@@ -1,6 +1,7 @@
 package com.i113w.better_mine_team.client.gui.screen;
 
 import com.i113w.better_mine_team.BetterMineTeam;
+import com.i113w.better_mine_team.client.gui.ClientTeamUiState;
 import com.i113w.better_mine_team.client.gui.asset.MTGuiIcons;
 import com.i113w.better_mine_team.common.menu.EntityDetailsMenu;
 import com.i113w.better_mine_team.common.network.TeamManagementPayload;
@@ -16,6 +17,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
@@ -44,6 +46,7 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
     private EditBox nameField;
     private boolean isRenaming = false;
     private IconButton followButton;
+    @Nullable private IconButton glowButton;
 
     // ── Aggressive level UI ──────────────────────────────────────────────────
     /**
@@ -84,6 +87,8 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         this.nameField.setVisible(false);
         this.nameField.setValue(this.menu.getTargetEntity().getDisplayName().getString());
         this.addRenderableWidget(this.nameField);
+
+        requestCaptainStatus();
 
         int btnX = this.leftPos + 7;
         int btnY = this.topPos + 130;
@@ -140,6 +145,17 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         this.addRenderableWidget(this.aggressiveBtn1);
         this.addRenderableWidget(this.aggressiveBtn2);
 
+        if (!(this.menu.getTargetEntity() instanceof Player)) {
+            this.glowButton = new IconButton(
+                    btnX + spacing * 2, aggrBtnY + spacing,
+                    ClientTeamUiState.getLightIcon(TeamManager.isGlowEnabled(this.menu.getTargetEntity())),
+                    (btn) -> onGlowToggle(),
+                    Component.translatable("better_mine_team.gui.tooltip.glow")
+            );
+            this.addRenderableWidget(this.glowButton);
+            updateGlowButtonState();
+        }
+
         // 向服务端请求当前 Aggressive 等级；服务端回包将调用 setAggressiveLevel()
         sendAction(TeamManagementPayload.ACTION_GET_AGGRESSIVE_LEVEL, "");
     }
@@ -150,6 +166,7 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
     public void containerTick() {
         super.containerTick();
         updateFollowButtonState();
+        updateGlowButtonState();
     }
 
     // ── Follow helpers ────────────────────────────────────────────────────────
@@ -158,6 +175,29 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         if (this.menu.getTargetEntity() == null || this.followButton == null) return;
         boolean isFollowing = this.menu.getTargetEntity().getPersistentData().getBoolean("bmt_follow_enabled");
         this.followButton.setIcon(isFollowing ? MTGuiIcons.ICON_FOLLOW_ON : MTGuiIcons.ICON_FOLLOW_OFF);
+    }
+
+    private void updateGlowButtonState() {
+        if (this.menu.getTargetEntity() == null || this.glowButton == null) return;
+        boolean glowEnabled = TeamManager.isGlowEnabled(this.menu.getTargetEntity());
+        this.glowButton.active = isLocalPlayerCaptain();
+        this.glowButton.setHighlighted(glowEnabled);
+        this.glowButton.setItemStack(ClientTeamUiState.getLightIcon(glowEnabled));
+    }
+
+    private void onGlowToggle() {
+        LivingEntity target = this.menu.getTargetEntity();
+        if (target == null) return;
+        if (!isLocalPlayerCaptain() || !ClientTeamUiState.tryMarkGlowClick()) return;
+
+        boolean newState = !TeamManager.isGlowEnabled(target);
+        ClientTeamUiState.setClientGlowState(target, newState);
+        updateGlowButtonState();
+        sendAction(TeamManagementPayload.ACTION_SET_GLOW, String.valueOf(newState));
+    }
+
+    public void refreshGlowControls() {
+        updateGlowButtonState();
     }
 
     // ── Aggressive level API (called from TeamManagementPayload.ClientHandler) ──
@@ -216,6 +256,19 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
                 this.menu.getTargetEntity().getId(),
                 data
         ));
+    }
+
+    private void requestCaptainStatus() {
+        if (this.minecraft == null || this.minecraft.player == null) return;
+        ClientTeamUiState.setLocalPlayerCaptain(this.minecraft.player, false);
+        PacketDistributor.sendToServer(new TeamManagementPayload(
+                TeamManagementPayload.ACTION_REQUEST_CAPTAIN_STATUS,
+                this.minecraft.player.getId(),
+                ""));
+    }
+
+    private boolean isLocalPlayerCaptain() {
+        return this.minecraft != null && ClientTeamUiState.isLocalPlayerCaptain(this.minecraft.player);
     }
 
     // ── Input ─────────────────────────────────────────────────────────────────
@@ -370,6 +423,11 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         public void setIcon(MTGuiIcons newIcon) {
             this.icon      = newIcon;
             this.itemStack = null;
+        }
+
+        public void setItemStack(ItemStack newItemStack) {
+            this.itemStack = newItemStack;
+            this.icon      = null;
         }
 
         /**

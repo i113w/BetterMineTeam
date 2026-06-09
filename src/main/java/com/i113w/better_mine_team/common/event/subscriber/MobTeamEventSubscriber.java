@@ -82,6 +82,7 @@ public class MobTeamEventSubscriber {
         if (event.getEntity() instanceof Mob mob) {
             if (TeamManager.getTeam(mob) != null) {
                 setupTeamAI(mob);
+                TeamManager.syncGlowWithTeamDefault(mob);
             }
         }
     }
@@ -152,7 +153,7 @@ public class MobTeamEventSubscriber {
         }
 
         // 7. 标记与特效
-        summon.setGlowingTag(true);
+        TeamManager.syncGlowWithTeamDefault(summon);
         summon.getPersistentData().putBoolean("bmt_summoned", true);
 
         // 应用 Config 中的 Follow 默认值
@@ -257,7 +258,7 @@ public class MobTeamEventSubscriber {
                         setupTeamAI(mob); // 统一调用
                     }
 
-                    livingEntity.setGlowingTag(true);
+                    TeamManager.syncGlowWithTeamDefault(livingEntity);
                     event.setCanceled(true);
                     event.setCancellationResult(InteractionResult.SUCCESS);
                 }
@@ -303,7 +304,7 @@ public class MobTeamEventSubscriber {
                 // [修改] 使用本地化键
                 player.displayClientMessage(Component.translatable("better_mine_team.msg.dragon_tame_success").withStyle(ChatFormatting.LIGHT_PURPLE), true);
 
-                dragon.setGlowingTag(true);
+                TeamManager.syncGlowWithTeamDefault(dragon);
                 event.setCanceled(true);
                 event.setCancellationResult(InteractionResult.SUCCESS);
             }

@@ -245,7 +245,7 @@ public class ServerPacketHandler {
                 pathfinderMob.targetSelector.addGoal(2, new AggressiveScanGoal(pathfinderMob));
             }
 
-            mob.setGlowingTag(true);
+            TeamManager.syncGlowWithTeamDefault(mob);
 
             // 7. 特效反馈 (可选：播放声音或粒子)
             // level.broadcastEntityEvent(mob, (byte) ...);

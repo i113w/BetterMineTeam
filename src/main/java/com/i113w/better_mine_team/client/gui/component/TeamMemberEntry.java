@@ -1,10 +1,10 @@
 package com.i113w.better_mine_team.client.gui.component;
 
+import com.i113w.better_mine_team.client.gui.ClientTeamUiState;
 import com.i113w.better_mine_team.client.gui.asset.MTGuiIcons;
 import com.i113w.better_mine_team.client.manager.ClientSelectionManager;
 import com.i113w.better_mine_team.client.rts.BmtRTSEvents;
 import com.i113w.better_mine_team.common.network.TeamManagementPayload;
-import com.i113w.better_mine_team.common.team.TeamDataStorage;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -14,6 +14,7 @@ import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.scores.PlayerTeam;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.NotNull;
@@ -94,6 +95,13 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
             // [B] 踢出 (最右侧)
             renderMappedButton(gfx, startX, btnY, mouseX, mouseY, MTGuiIcons.ICON_KICK);
 
+            if (!(member instanceof Player)) {
+                startX -= BTN_SPACING;
+                boolean glowEnabled = TeamManager.isGlowEnabled(member);
+                renderItemButton(gfx, startX, btnY, mouseX, mouseY,
+                        ClientTeamUiState.getLightIcon(glowEnabled), glowEnabled);
+            }
+
             // [A] 任命队长 (左边一个)
             // 仅当目标是玩家时才显示任命队长
             if (member instanceof Player) {
@@ -104,12 +112,7 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
     }
 
     private boolean isCaptain(Player player) {
-        if (player == null) return false;
-        // 客户端简单的队长检查，实际权限由服务端校验
-        // 这里可以通过 TeamDataStorage 的同步数据检查，或者简单检查计分板队伍所有者(如果是原版逻辑)
-        // 由于 TeamDataStorage 在客户端可能不同步，我们暂时假设所有人都显示按钮，点击后由服务端拒绝
-        // 或者：优化为检查 TeamManager 的逻辑
-        return true; // 暂时让所有人都能看到按钮，服务端会拦截非队长操作
+        return ClientTeamUiState.isLocalPlayerCaptain(player);
     }
 
     private void renderMappedButton(GuiGraphics gfx, int x, int y, int mouseX, int mouseY, MTGuiIcons icon) {
@@ -120,6 +123,19 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
             MTGuiIcons.BUTTON_NORMAL.render(gfx, x, y);
         }
         icon.render(gfx, x + 2, y + 2);
+    }
+
+    private void renderItemButton(GuiGraphics gfx, int x, int y, int mouseX, int mouseY, ItemStack itemStack, boolean active) {
+        boolean hovered = mouseX >= x && mouseX < x + BTN_SIZE && mouseY >= y && mouseY < y + BTN_SIZE;
+        if (active) {
+            gfx.fill(x - 1, y - 1, x + BTN_SIZE + 1, y + BTN_SIZE + 1, 0xFFFFD700);
+        }
+        if (hovered) {
+            MTGuiIcons.BUTTON_HOVER.render(gfx, x, y);
+        } else {
+            MTGuiIcons.BUTTON_NORMAL.render(gfx, x, y);
+        }
+        gfx.renderItem(itemStack, x + 2, y + 2);
     }
 
     private void renderEntity(GuiGraphics gfx, int x, int y, int scale, float mouseX, float mouseY, LivingEntity entity) {
@@ -163,6 +179,19 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
             // [B] 踢出 (Kick) - 距离右边 4~24
             if (distFromRight >= 4 && distFromRight <= 24) {
                 PacketDistributor.sendToServer(new TeamManagementPayload(TeamManagementPayload.ACTION_KICK, member.getId(), ""));
+                return true;
+            }
+
+            if (!(member instanceof Player) && distFromRight >= 26 && distFromRight <= 46) {
+                if (!ClientTeamUiState.tryMarkGlowClick()) {
+                    return true;
+                }
+                boolean newState = !TeamManager.isGlowEnabled(member);
+                ClientTeamUiState.setClientGlowState(member, newState);
+                PacketDistributor.sendToServer(new TeamManagementPayload(
+                        TeamManagementPayload.ACTION_SET_GLOW,
+                        member.getId(),
+                        String.valueOf(newState)));
                 return true;
             }
 

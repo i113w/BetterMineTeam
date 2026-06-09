@@ -5,9 +5,12 @@ import com.i113w.better_mine_team.common.config.BMTConfig;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.scores.PlayerTeam;
@@ -21,6 +24,8 @@ public class TeamManager {
 
     public static final String TEAM_PREFIX = BetterMineTeam.MODID + "_";
     private static final int MAX_THREATS_PER_TEAM = 20;
+    public static final String TAG_GLOW_ENABLED = "bmt_glow_enabled";
+    private static final String TAG_GLOW_REVISION = "bmt_glow_revision";
 
     // 威胁记录：实体 + 时间戳
     public record ThreatEntry(LivingEntity entity, long timestamp) {}
@@ -291,6 +296,124 @@ public class TeamManager {
      */
     public static void setAggressiveLevel(LivingEntity entity, int level) {
         entity.getPersistentData().putInt("bmt_aggressive_level", Mth.clamp(level, 0, 2));
+    }
+
+    public static boolean isGlowEnabled(LivingEntity entity) {
+        CompoundTag data = entity.getPersistentData();
+        if (data.contains(TAG_GLOW_ENABLED)) {
+            return data.getBoolean(TAG_GLOW_ENABLED);
+        }
+        return entity.hasGlowingTag();
+    }
+
+    public static void setGlowEnabled(LivingEntity entity, boolean enabled) {
+        int revision = getCurrentTeamGlowRevision(entity);
+        setGlowEnabled(entity, enabled, revision);
+    }
+
+    public static void clearGlowState(LivingEntity entity) {
+        CompoundTag data = entity.getPersistentData();
+        data.remove(TAG_GLOW_ENABLED);
+        data.remove(TAG_GLOW_REVISION);
+        entity.setGlowingTag(false);
+    }
+
+    public static void syncGlowWithTeamDefault(LivingEntity entity) {
+        if (entity instanceof Player) return;
+
+        PlayerTeam team = getTeam(entity);
+        if (team == null) return;
+
+        if (!(entity.level() instanceof ServerLevel level)) {
+            entity.setGlowingTag(isGlowEnabled(entity));
+            return;
+        }
+
+        TeamDataStorage storage = TeamDataStorage.get(level);
+        int teamRevision = storage.getTeamGlowRevision(team.getName());
+        CompoundTag data = entity.getPersistentData();
+
+        if (!data.contains(TAG_GLOW_ENABLED) || data.getInt(TAG_GLOW_REVISION) < teamRevision) {
+            setGlowEnabled(entity, storage.getTeamGlowDefault(team.getName()), teamRevision);
+            return;
+        }
+
+        entity.setGlowingTag(data.getBoolean(TAG_GLOW_ENABLED));
+    }
+
+    public static int setTeamGlowEnabled(MinecraftServer server, PlayerTeam team, boolean enabled) {
+        if (server == null || team == null) return 0;
+
+        int revision = TeamDataStorage.get(server.overworld()).setTeamGlowDefault(team.getName(), enabled);
+        int changed = 0;
+
+        for (LivingEntity member : getLoadedTeamMembers(server, team)) {
+            if (member == null || member instanceof Player) continue;
+            setGlowEnabled(member, enabled, revision);
+            changed++;
+        }
+
+        return changed;
+    }
+
+    public static List<LivingEntity> getLoadedTeamMembers(MinecraftServer server, PlayerTeam team) {
+        if (server == null || team == null) return Collections.emptyList();
+
+        List<LivingEntity> members = new ArrayList<>();
+        for (String memberName : team.getPlayers()) {
+            LivingEntity member = findLoadedTeamMember(server, memberName);
+            if (member != null) {
+                members.add(member);
+            }
+        }
+        return members;
+    }
+
+    public static void syncLoadedTeamMemberGlow(MinecraftServer server) {
+        if (server == null) return;
+
+        Scoreboard scoreboard = server.getScoreboard();
+        for (DyeColor color : ORIGINAL_DYE_COLORS) {
+            PlayerTeam team = scoreboard.getPlayerTeam(getTeamName(color));
+            if (team == null) continue;
+
+            for (String memberName : team.getPlayers()) {
+                LivingEntity member = findLoadedTeamMember(server, memberName);
+                if (member != null) {
+                    syncGlowWithTeamDefault(member);
+                }
+            }
+        }
+    }
+
+    private static int getCurrentTeamGlowRevision(LivingEntity entity) {
+        PlayerTeam team = getTeam(entity);
+        if (team == null || !(entity.level() instanceof ServerLevel level)) return 0;
+        return TeamDataStorage.get(level).getTeamGlowRevision(team.getName());
+    }
+
+    private static void setGlowEnabled(LivingEntity entity, boolean enabled, int revision) {
+        CompoundTag data = entity.getPersistentData();
+        data.putBoolean(TAG_GLOW_ENABLED, enabled);
+        data.putInt(TAG_GLOW_REVISION, revision);
+        entity.setGlowingTag(enabled);
+    }
+
+    @Nullable
+    private static LivingEntity findLoadedTeamMember(MinecraftServer server, String memberName) {
+        try {
+            UUID uuid = UUID.fromString(memberName);
+            for (ServerLevel level : server.getAllLevels()) {
+                Entity entity = level.getEntity(uuid);
+                if (entity instanceof LivingEntity living && living.isAlive()) {
+                    return living;
+                }
+            }
+            return null;
+        } catch (IllegalArgumentException ignored) {
+            ServerPlayer player = server.getPlayerList().getPlayerByName(memberName);
+            return player != null && player.isAlive() ? player : null;
+        }
     }
 
 

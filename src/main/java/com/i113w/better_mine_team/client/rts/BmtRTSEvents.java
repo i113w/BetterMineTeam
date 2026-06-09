@@ -1,6 +1,7 @@
 package com.i113w.better_mine_team.client.rts;
 
 import com.i113w.better_mine_team.BetterMineTeam;
+import com.i113w.better_mine_team.client.ModKeyMappings;
 import com.i113w.better_mine_team.client.gui.screen.TeamManagementScreen;
 import com.i113w.better_mine_team.client.manager.ClientSelectionManager;
 import com.i113w.better_mine_team.common.network.data.CommandTarget;
@@ -141,17 +142,22 @@ public class BmtRTSEvents {
 
     @SubscribeEvent
     public static void onKeyInput(InputEvent.Key event) {
-        if (com.i113w.better_mine_team.client.ModKeyMappings.OPEN_TEAM_MENU.consumeClick()) {
-            Minecraft.getInstance().setScreen(new TeamManagementScreen());
+        while (ModKeyMappings.OPEN_TEAM_MENU.consumeClick()) {
+            if (RTSCameraController.get().isActive()) continue;
+
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player != null && mc.level != null && mc.screen == null) {
+                mc.setScreen(new TeamManagementScreen());
+            }
         }
     }
 
     @SubscribeEvent
     public static void onRenderGui(RenderGuiEvent.Post event) {
-        // 只有在 RTS 摄像机激活时才渲染 UI
-        if (!RTSCameraController.get().isActive()) return;
-
         Minecraft mc = Minecraft.getInstance();
+        // 只有在 RTS 摄像机激活时才渲染 UI
+        if (!RTSCameraController.get().isActive() || mc.options.hideGui) return;
+
         int width = mc.getWindow().getGuiScaledWidth();
         int height = mc.getWindow().getGuiScaledHeight();
 

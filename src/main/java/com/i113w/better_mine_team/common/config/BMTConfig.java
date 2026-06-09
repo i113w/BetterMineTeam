@@ -46,6 +46,7 @@ public class BMTConfig {
     private static final ModConfigSpec.BooleanValue blockUnauthorizedAttacks;
 
     private static final ModConfigSpec.BooleanValue defaultFollowEnabled;
+    private static final ModConfigSpec.BooleanValue defaultGlowEnabled;
     private static final ModConfigSpec.BooleanValue enableAutoTeleport;
     private static final ModConfigSpec.DoubleValue autoTeleportDistance;
     private static final ModConfigSpec.IntValue attackCommitmentHardTicks;
@@ -171,6 +172,10 @@ public class BMTConfig {
         defaultFollowEnabled = builder
                 .comment("Whether entities should have 'Follow' enabled by default when joining a team.")
                 .define("defaultFollowEnabled", false);
+
+        defaultGlowEnabled = builder
+                .comment("Whether non-player entities should glow by default when joining a team.")
+                .define("defaultGlowEnabled", true);
 
         enableAutoTeleport = builder
                 .comment("Whether team entities following the captain should automatically teleport to them when too far.")
@@ -415,6 +420,7 @@ public class BMTConfig {
     public static boolean isEntityDetailsScreenBlacklisted(EntityType<?> type) { return entityDetailsScreenBlacklistCache.contains(type); }
 
     public static boolean isDefaultFollowEnabled() { return defaultFollowEnabled.get(); }
+    public static boolean isDefaultGlowEnabled() { return defaultGlowEnabled.get(); }
     public static boolean isAutoTeleportEnabled() { return enableAutoTeleport.get(); }
     public static double getAutoTeleportDistanceSqr() { return autoTeleportDistance.get() * autoTeleportDistance.get(); }
 
