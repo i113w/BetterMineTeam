@@ -124,8 +124,8 @@ public class TeamFollowCaptainGoal extends Goal implements TeamGoal {
         this.mob.getLookControl().setLookAt(this.captain, 10.0F, (float) this.mob.getMaxHeadXRot());
 
         // 自动传送检查
-        if (BMTConfig.isFollowTeleportEnabled() && !this.mob.isLeashed() && !this.mob.isPassenger()) {
-            if (this.mob.distanceToSqr(this.captain) >= BMTConfig.getFollowTeleportDistanceSqr()) {
+        if (BMTConfig.isAutoTeleportEnabled() && !this.mob.isLeashed() && !this.mob.isPassenger()) {
+            if (this.mob.distanceToSqr(this.captain) >= BMTConfig.getAutoTeleportDistanceSqr()) {
                 teleportToCaptain();
                 return;
             }

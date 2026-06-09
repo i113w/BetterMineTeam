@@ -223,7 +223,7 @@ public class ServerPacketHandler {
             }
 
             mob.setHealth(mob.getMaxHealth());
-            mob.getPersistentData().putBoolean("bmt_follow_enabled", BMTConfig.getDefaultFollowState());
+            mob.getPersistentData().putBoolean("bmt_follow_enabled", BMTConfig.isDefaultFollowEnabled());
             mob.setPersistenceRequired();
 
             MobTeamEventSubscriber.setupTeamAI(mob);

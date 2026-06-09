@@ -184,7 +184,7 @@ public class TeamManagementScreen extends Screen {
         for (Entity entity : this.minecraft.level.entitiesForRendering()) {
             if (entity instanceof LivingEntity living) {
                 // 黑名单生物不会被加入到客户端实体列表中
-                if (BMTConfig.isTeamMemberListBlacklisted(living.getType())) continue;
+                if (BMTConfig.isEntityHiddenFromMemberList(living.getType())) continue;
 
                 PlayerTeam entityTeam = TeamManager.getTeam(living);
                 if (entityTeam != null && entityTeam.getName().equals(myTeam.getName())) {

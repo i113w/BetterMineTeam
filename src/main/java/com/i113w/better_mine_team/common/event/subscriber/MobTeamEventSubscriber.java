@@ -167,7 +167,7 @@ public class MobTeamEventSubscriber {
 
                     livingEntity.setHealth(livingEntity.getMaxHealth());
 
-                    livingEntity.getPersistentData().putBoolean("bmt_follow_enabled", BMTConfig.getDefaultFollowState());
+                    livingEntity.getPersistentData().putBoolean("bmt_follow_enabled", BMTConfig.isDefaultFollowEnabled());
 
                     if (livingEntity instanceof Mob mob) {
                         mob.setPersistenceRequired();
@@ -208,7 +208,7 @@ public class MobTeamEventSubscriber {
         TeamManager.syncGlowWithTeamDefault(summon);
         summon.getPersistentData().putBoolean("bmt_summoned", true);
 
-        summon.getPersistentData().putBoolean("bmt_follow_enabled", BMTConfig.getDefaultFollowState());
+        summon.getPersistentData().putBoolean("bmt_follow_enabled", BMTConfig.isDefaultFollowEnabled());
 
         if (summon instanceof Mob mob) {
             setupTeamAI(mob);

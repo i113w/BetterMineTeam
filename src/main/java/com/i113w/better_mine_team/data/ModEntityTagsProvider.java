@@ -19,6 +19,9 @@ public class ModEntityTagsProvider extends EntityTypeTagsProvider {
 
     @Override
     protected void addTags(HolderLookup.Provider provider) {
+        this.tag(ModTags.Entities.TAMEABLE);
+        this.tag(ModTags.Entities.UNTAMEABLE);
+
         // 仅保留护甲架以及平常难以寻路/攻击到的飞行生物
         this.tag(ModTags.Entities.IGNORED_BY_LEVEL2_SCAN)
                 .add(EntityType.ARMOR_STAND)

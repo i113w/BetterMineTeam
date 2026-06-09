@@ -77,7 +77,7 @@ public class TeamActionPacket {
                         scoreboard.addPlayerToTeam(player.getScoreboardName(), newTeam);
 
                         // 自动队长分配逻辑
-                        if (BMTConfig.isAutoGrantCaptainEnabled()) {
+                        if (BMTConfig.isAutoAssignCaptainEnabled()) {
                             // 检查该队伍是否已经有队长
                             UUID existingCaptain = storage.getCaptain(newTeam.getName());
 

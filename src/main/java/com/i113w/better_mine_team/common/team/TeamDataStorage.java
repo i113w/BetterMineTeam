@@ -58,7 +58,7 @@ public class TeamDataStorage extends SavedData {
     // ---------------- 发光默认值 ----------------
 
     public boolean getTeamGlowDefault(String teamName) {
-        return teamGlowDefaults.getOrDefault(teamName, BMTConfig.getDefaultGlowState());
+        return teamGlowDefaults.getOrDefault(teamName, BMTConfig.isDefaultGlowEnabled());
     }
 
     public int getTeamGlowRevision(String teamName) {
