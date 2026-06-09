@@ -2,9 +2,12 @@ package com.i113w.better_mine_team.common.config;
 
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.entity.goal.GoalSanitizer;
+import com.i113w.better_mine_team.common.registry.ModTags;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -15,9 +18,16 @@ import com.google.gson.JsonParser;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 public class BMTConfig {
     public static final ModConfigSpec CONFIG;
+    private static final Pattern RESOURCE_NAMESPACE = Pattern.compile("[a-z0-9_.-]+");
+
+    public enum TamingListMode {
+        BLACKLIST,
+        WHITELIST
+    }
 
     // 通用
     private static final ModConfigSpec.BooleanValue enableTeamFocusFire;
@@ -77,13 +87,20 @@ public class BMTConfig {
     private static final ModConfigSpec.ConfigValue<String> defaultTamingMaterial;
     private static final ModConfigSpec.ConfigValue<String> dragonTamingMaterial;
 
+    private static final ModConfigSpec.ConfigValue<TamingListMode> tamingListMode;
     private static final ModConfigSpec.ConfigValue<List<? extends String>> tamingMaterials;
     private static final ModConfigSpec.ConfigValue<List<? extends String>> blacklistedEntities;
+    private static final ModConfigSpec.ConfigValue<List<? extends String>> whitelistedEntities;
 
     private static final com.google.common.collect.BiMap<EntityType<?>, Ingredient> tamingMaterialMap = com.google.common.collect.HashBiMap.create();
     private static Ingredient cachedDefaultIngredient = Ingredient.of(Items.GOLDEN_APPLE);
     private static Ingredient cachedDragonIngredient = Ingredient.of(Items.GOLDEN_APPLE);
     private static final Set<EntityType<?>> blacklistedCache = new HashSet<>();
+    private static final Set<String> blacklistedNamespaces = new HashSet<>();
+    private static final Set<TagKey<EntityType<?>>> blacklistedTags = new HashSet<>();
+    private static final Set<EntityType<?>> whitelistedCache = new HashSet<>();
+    private static final Set<String> whitelistedNamespaces = new HashSet<>();
+    private static final Set<TagKey<EntityType<?>>> whitelistedTags = new HashSet<>();
     private static final ModConfigSpec.DoubleValue dragonMaxPitch;
 
     private static final ModConfigSpec.IntValue followPathFailThreshold;
@@ -311,10 +328,25 @@ public class BMTConfig {
                 .comment("Specific item/tag used to tame the Ender Dragon.")
                 .define("dragonTamingMaterial", "minecraft:golden_apple");
 
+        tamingListMode = builder
+                .comment("BLACKLIST: every entity can be tamed unless denied by blacklist rules.")
+                .comment("WHITELIST: only entities allowed by whitelist rules can be tamed.")
+                .comment("Blacklist rules always win over whitelist rules.")
+                .defineEnum("tamingListMode", TamingListMode.BLACKLIST);
+
         blacklistedEntities = builder
-                .comment("List of entity IDs that cannot be tamed.")
-                .comment("Example: [\"minecraft:zombie\", \"minecraft:skeleton\"]")
+                .comment("Entities that cannot be tamed.")
+                .comment("Supports entity IDs, entity type tags prefixed with '#', and namespace wildcards.")
+                .comment("Examples: [\"minecraft:zombie\", \"#better_mine_team:untameable\", \"i113w_camera_lib:*\"]")
+                .comment("The namespace wildcard \"i113w_camera_lib:*\" matches every entity type from that mod, including \"i113w_camera_lib:rts_camera\".")
                 .defineListAllowEmpty("blacklistedEntities", List.of(), o -> o instanceof String);
+
+        whitelistedEntities = builder
+                .comment("Entities that can be tamed when tamingListMode is WHITELIST.")
+                .comment("Supports entity IDs, entity type tags prefixed with '#', and namespace wildcards.")
+                .comment("Examples: [\"minecraft:cow\", \"#better_mine_team:tameable\", \"i113w_camera_lib:*\"]")
+                .comment("The namespace wildcard \"i113w_camera_lib:*\" matches every entity type from that mod, including \"i113w_camera_lib:rts_camera\".")
+                .defineListAllowEmpty("whitelistedEntities", List.of(), o -> o instanceof String);
 
         tamingMaterials = builder
                 .comment("List of specific materials for specific entities.")
@@ -339,11 +371,7 @@ public class BMTConfig {
         // 加载龙材料
         loadDragonMaterial();
 
-        blacklistedCache.clear();
-        for (String id : blacklistedEntities.get()) {
-            ResourceLocation rl = ResourceLocation.tryParse(id);
-            if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(blacklistedCache::add);
-        }
+        loadTamingRules();
 
         tamingMaterialMap.clear();
         for (String entry : tamingMaterials.get()) {
@@ -382,6 +410,45 @@ public class BMTConfig {
             if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(entityDetailsScreenBlacklistCache::add);
         }
         GoalSanitizer.loadProtectedClasses();
+    }
+
+    private static void loadTamingRules() {
+        blacklistedCache.clear();
+        blacklistedNamespaces.clear();
+        blacklistedTags.clear();
+        loadTamingRuleList(blacklistedEntities.get(), blacklistedCache, blacklistedNamespaces, blacklistedTags);
+
+        whitelistedCache.clear();
+        whitelistedNamespaces.clear();
+        whitelistedTags.clear();
+        loadTamingRuleList(whitelistedEntities.get(), whitelistedCache, whitelistedNamespaces, whitelistedTags);
+    }
+
+    private static void loadTamingRuleList(List<? extends String> entries,
+                                           Set<EntityType<?>> entities,
+                                           Set<String> namespaces,
+                                           Set<TagKey<EntityType<?>>> tags) {
+        for (String entry : entries) {
+            if (entry == null) continue;
+
+            String rule = entry.trim();
+            if (rule.isEmpty()) continue;
+
+            if (rule.startsWith("#")) {
+                ResourceLocation tagId = ResourceLocation.tryParse(rule.substring(1));
+                if (tagId != null) tags.add(TagKey.create(Registries.ENTITY_TYPE, tagId));
+                continue;
+            }
+
+            if (rule.endsWith(":*")) {
+                String namespace = rule.substring(0, rule.length() - 2);
+                if (RESOURCE_NAMESPACE.matcher(namespace).matches()) namespaces.add(namespace);
+                continue;
+            }
+
+            ResourceLocation rl = ResourceLocation.tryParse(rule);
+            if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(entities::add);
+        }
     }
 
     private static void loadDefaultMaterial() { cachedDefaultIngredient = parseIngredientString(defaultTamingMaterial.get(), Items.GOLDEN_APPLE); }
@@ -441,9 +508,36 @@ public class BMTConfig {
     public static double getRemoteInventoryRangeSqr() { return remoteInventoryRange.get() * remoteInventoryRange.get(); }
     public static com.google.common.collect.BiMap<EntityType<?>, Ingredient> getTamingMaterialMap() { return tamingMaterialMap; }
     public static Ingredient getTamingMaterial(EntityType<?> entityType) {
-        if (blacklistedCache.contains(entityType)) return Ingredient.EMPTY;
+        if (!canTame(entityType)) return Ingredient.EMPTY;
         if (entityType == EntityType.ENDER_DRAGON) return cachedDragonIngredient;
         return tamingMaterialMap.getOrDefault(entityType, cachedDefaultIngredient);
+    }
+    public static boolean canTame(EntityType<?> entityType) {
+        if (isTamingBlacklisted(entityType)) return false;
+        if (tamingListMode.get() == TamingListMode.WHITELIST) return isTamingWhitelisted(entityType);
+        return true;
+    }
+    public static boolean isTamingBlacklisted(EntityType<?> entityType) {
+        return entityType.is(ModTags.Entities.UNTAMEABLE)
+                || matchesTamingRules(entityType, blacklistedCache, blacklistedNamespaces, blacklistedTags);
+    }
+    public static boolean isTamingWhitelisted(EntityType<?> entityType) {
+        return entityType.is(ModTags.Entities.TAMEABLE)
+                || matchesTamingRules(entityType, whitelistedCache, whitelistedNamespaces, whitelistedTags);
+    }
+    private static boolean matchesTamingRules(EntityType<?> entityType,
+                                              Set<EntityType<?>> entities,
+                                              Set<String> namespaces,
+                                              Set<TagKey<EntityType<?>>> tags) {
+        if (entities.contains(entityType)) return true;
+
+        ResourceLocation entityId = entityType.builtInRegistryHolder().key().location();
+        if (namespaces.contains(entityId.getNamespace())) return true;
+
+        for (TagKey<EntityType<?>> tag : tags) {
+            if (entityType.is(tag)) return true;
+        }
+        return false;
     }
     public static float getDragonMaxPitch() { return dragonMaxPitch.get().floatValue(); }
     public static int getFollowPathFailThreshold() { return followPathFailThreshold.get(); }
