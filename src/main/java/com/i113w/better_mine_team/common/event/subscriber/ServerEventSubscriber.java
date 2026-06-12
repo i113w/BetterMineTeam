@@ -28,6 +28,7 @@ public class ServerEventSubscriber {
             // [修改] 传入 server 实例以获取准确时间
             TeamManager.cleanupExpiredHateData(event.getServer());
             TeamManager.syncLoadedTeamMemberGlow(event.getServer());
+            TeamManager.cleanupEmptyPersonalTeams(event.getServer());
         }
     }
     @SubscribeEvent

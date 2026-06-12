@@ -2,6 +2,7 @@ package com.i113w.better_mine_team.client.gui.team;
 
 import com.google.common.collect.Maps;
 import com.i113w.better_mine_team.BetterMineTeam;
+import com.i113w.better_mine_team.client.gui.ClientTeamUiState;
 import com.i113w.better_mine_team.common.network.TeamActionPayload;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import net.minecraft.ChatFormatting;
@@ -41,10 +42,13 @@ public class TeamRender {
     private ImageButton teamIcon;
     private ImageButton teamPVPOn;
     private ImageButton teamPVPOff;
+    private ImageButton personalTeamToggle;
     private final Map<String, ImageButton> teamSmallIcons = Maps.newHashMap();
 
     private String lastTeamName = "";
     private boolean lastPvPState = false;
+    private boolean lastPersonalTeamsAvailable = false;
+    private boolean lastPersonalTeamEnabled = false;
 
     // 私有构造，强制通过 attachTo 创建
     private TeamRender(AbstractContainerScreen<?> screen, Consumer<GuiEventListener> widgetAdder) {
@@ -137,10 +141,18 @@ public class TeamRender {
         // 3. 初始化颜色选择板
         initSmallIcon(guiLeft, guiTop);
 
-        // 4. 注册到 Screen (这样 Screen 就会自动处理点击和渲染)
+        // 4. 初始化个人队伍按钮
+        this.personalTeamToggle = new ImageButton(
+                guiLeft - MAIN_ICON_SIZE,
+                guiTop + 8 * (SMALL_ICON_SIZE + SMALL_ICON_SPACING) + MAIN_ICON_OFFSET,
+                MAIN_ICON_SIZE, MAIN_ICON_SIZE,
+                createWidgetSprites("team/pvp/white_pvp_off"),
+                button -> sendPersonalTeamPacket(!this.lastPersonalTeamEnabled));
+
+        // 5. 注册到 Screen (这样 Screen 就会自动处理点击和渲染)
         addRenderableWidget();
 
-        // 5. 初始状态同步
+        // 6. 初始状态同步
         this.lastTeamName = "";
         checkAndUpdateState();
     }
@@ -150,6 +162,7 @@ public class TeamRender {
         addWidget(this.teamIcon);
         addWidget(this.teamPVPOn);
         addWidget(this.teamPVPOff);
+        addWidget(this.personalTeamToggle);
         for (ImageButton button : teamSmallIcons.values()) {
             addWidget(button);
         }
@@ -197,18 +210,27 @@ public class TeamRender {
 
         String currentTeamName = (team != null) ? team.getName() : "null";
         boolean currentPvPState = (team != null) && team.isAllowFriendlyFire();
+        boolean personalTeamsAvailable = ClientTeamUiState.isPersonalTeamsAvailable(player);
+        boolean personalTeamEnabled = ClientTeamUiState.isPersonalTeamEnabled(player);
 
-        if (Objects.equals(currentTeamName, lastTeamName) && currentPvPState == lastPvPState) {
+        if (Objects.equals(currentTeamName, lastTeamName)
+                && currentPvPState == lastPvPState
+                && personalTeamsAvailable == lastPersonalTeamsAvailable
+                && personalTeamEnabled == lastPersonalTeamEnabled) {
             return;
         }
 
         this.lastTeamName = currentTeamName;
         this.lastPvPState = currentPvPState;
+        this.lastPersonalTeamsAvailable = personalTeamsAvailable;
+        this.lastPersonalTeamEnabled = personalTeamEnabled;
 
         updateButtonsState(team);
     }
 
     private void updateButtonsState(PlayerTeam team) {
+        updatePersonalTeamButton();
+
         if (team == null) {
             this.teamPVPOn.visible = false;
             this.teamPVPOff.visible = false;
@@ -230,11 +252,15 @@ public class TeamRender {
     }
 
     private void sendChangeTeamPacket(String colorName) {
-        PacketDistributor.sendToServer(new TeamActionPayload(0, colorName, false));
+        PacketDistributor.sendToServer(new TeamActionPayload(TeamActionPayload.ACTION_CHANGE_TEAM, colorName, false));
     }
 
     private void sendPvPPacket(boolean enablePvP) {
-        PacketDistributor.sendToServer(new TeamActionPayload(1, "", enablePvP));
+        PacketDistributor.sendToServer(new TeamActionPayload(TeamActionPayload.ACTION_SET_PVP, "", enablePvP));
+    }
+
+    private void sendPersonalTeamPacket(boolean enabled) {
+        PacketDistributor.sendToServer(new TeamActionPayload(TeamActionPayload.ACTION_SET_PERSONAL_TEAM, "", enabled));
     }
 
     private void visibleTeamSmallIcon(boolean visible) {
@@ -251,6 +277,16 @@ public class TeamRender {
     private WidgetSprites createWidgetSprites(String path) {
         ResourceLocation loc = BetterMineTeam.asResource(path);
         return new WidgetSprites(loc, loc);
+    }
+
+    private void updatePersonalTeamButton() {
+        if (this.personalTeamToggle == null) return;
+        this.personalTeamToggle.visible = this.lastPersonalTeamsAvailable;
+        this.personalTeamToggle.active = this.lastPersonalTeamsAvailable;
+        setImageButtonSprites(
+                this.personalTeamToggle,
+                this.lastPersonalTeamEnabled ? "team/pvp/white_pvp_on" : "team/pvp/white_pvp_off"
+        );
     }
 
     private String getTextureColorName(PlayerTeam team) {

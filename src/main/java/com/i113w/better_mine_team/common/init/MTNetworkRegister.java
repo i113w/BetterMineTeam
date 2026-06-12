@@ -73,5 +73,11 @@ public class MTNetworkRegister {
                 S2C_SyncTeamLordPayload.STREAM_CODEC,
                 S2C_SyncTeamLordPayload::clientHandle
         );
+
+        registrar.playToClient(
+                S2C_PersonalTeamStatePayload.TYPE,
+                S2C_PersonalTeamStatePayload.STREAM_CODEC,
+                S2C_PersonalTeamStatePayload::clientHandle
+        );
     }
 }

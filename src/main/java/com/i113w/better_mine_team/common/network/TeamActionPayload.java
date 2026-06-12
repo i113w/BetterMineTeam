@@ -2,6 +2,7 @@ package com.i113w.better_mine_team.common.network;
 
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.config.BMTConfig;
+import com.i113w.better_mine_team.common.event.subscriber.PlayerEventSubscriber;
 import com.i113w.better_mine_team.common.team.TeamDataStorage;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import io.netty.buffer.ByteBuf;
@@ -24,6 +25,9 @@ import java.util.regex.Pattern;
 public record TeamActionPayload(int action, String data, boolean state) implements CustomPacketPayload {
 
     public static final Type<TeamActionPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "team_action"));
+    public static final int ACTION_CHANGE_TEAM = 0;
+    public static final int ACTION_SET_PVP = 1;
+    public static final int ACTION_SET_PERSONAL_TEAM = 2;
 
     // 用于识别 UUID 字符串的正则 (用于区分生物和玩家)
     private static final Pattern UUID_PATTERN = Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
@@ -49,8 +53,20 @@ public record TeamActionPayload(int action, String data, boolean state) implemen
 
             Scoreboard scoreboard = server.getScoreboard();
 
+            TeamDataStorage storage = TeamDataStorage.get(player.serverLevel());
+
             // Action 0: 切换队伍
-            if (payload.action == 0) {
+            if (payload.action == ACTION_CHANGE_TEAM) {
+                if (BMTConfig.isPersonalTeamsEnabled() && storage.getPersonalTeamPreference(player)) {
+                    player.displayClientMessage(
+                            Component.translatable("better_mine_team.msg.personal_team_select_blocked")
+                                    .withStyle(ChatFormatting.RED),
+                            true
+                    );
+                    PlayerEventSubscriber.syncPersonalTeamState(player);
+                    return;
+                }
+
                 // 使用安全方法获取颜色
                 DyeColor color = TeamManager.getOriginalColorByName(payload.data, null);
 
@@ -60,7 +76,6 @@ public record TeamActionPayload(int action, String data, boolean state) implemen
 
                     if (newTeam != null) {
                         PlayerTeam currentTeam = TeamManager.getTeam(player);
-                        TeamDataStorage storage = TeamDataStorage.get(player.serverLevel());
 
                         // 如果玩家是旧队伍的队长，先移除其权限
                         if (currentTeam != null && storage.isCaptain(player)) {
@@ -96,15 +111,36 @@ public record TeamActionPayload(int action, String data, boolean state) implemen
                 }
             }
             // Action 1: 切换 PvP 状态
-            else if (payload.action == 1) {
+            else if (payload.action == ACTION_SET_PVP) {
                 PlayerTeam team = scoreboard.getPlayersTeam(player.getScoreboardName());
                 if (team != null) {
                     // [安全检查] 只有队长才能切换 PvP
                     // 虽然 UI 做了限制，但服务端最好也防一下发包
-                    if (TeamDataStorage.get(player.serverLevel()).isCaptain(player)) {
+                    if (storage.isCaptain(player)) {
                         team.setAllowFriendlyFire(payload.state);
                     }
                 }
+            }
+            // Action 2: 切换个人队伍偏好
+            else if (payload.action == ACTION_SET_PERSONAL_TEAM) {
+                if (!BMTConfig.isPersonalTeamsEnabled()) {
+                    storage.setPersonalTeamPreference(player.getUUID(), false);
+                    player.displayClientMessage(
+                            Component.translatable("better_mine_team.msg.personal_team_disabled_by_server")
+                                    .withStyle(ChatFormatting.RED),
+                            true
+                    );
+                    PlayerEventSubscriber.syncPersonalTeamState(player);
+                    return;
+                }
+
+                storage.setPersonalTeamPreference(player.getUUID(), payload.state);
+                if (payload.state) {
+                    TeamManager.joinPersonalTeam(player, true);
+                } else {
+                    TeamManager.leaveOwnedPersonalTeam(player, true);
+                }
+                PlayerEventSubscriber.syncPersonalTeamState(player);
             }
         });
     }

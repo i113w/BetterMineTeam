@@ -4,6 +4,7 @@ import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.config.BMTConfig;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -19,13 +20,16 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 
 public class TeamManager {
 
     public static final String TEAM_PREFIX = BetterMineTeam.MODID + "_";
+    public static final String PERSONAL_TEAM_PREFIX = "bmt_personal_";
     private static final int MAX_THREATS_PER_TEAM = 20;
     public static final String TAG_GLOW_ENABLED = "bmt_glow_enabled";
     private static final String TAG_GLOW_REVISION = "bmt_glow_revision";
+    private static final Pattern UUID_PATTERN = Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
     // 威胁记录：实体 + 时间戳
     public record ThreatEntry(LivingEntity entity, long timestamp) {}
@@ -257,6 +261,181 @@ public class TeamManager {
         return TEAM_PREFIX + color.getName();
     }
 
+    public static boolean isPersonalTeam(PlayerTeam team, TeamDataStorage storage) {
+        return team != null && storage != null && storage.isPersonalTeam(team.getName());
+    }
+
+    public static boolean isOwnedPersonalTeam(PlayerTeam team, ServerPlayer player, TeamDataStorage storage) {
+        return team != null
+                && player != null
+                && storage != null
+                && storage.isPersonalTeamOwner(team.getName(), player.getUUID());
+    }
+
+    public static boolean isPersonalTeamActive(ServerPlayer player) {
+        if (player == null) return false;
+        PlayerTeam currentTeam = getTeam(player);
+        if (currentTeam == null) return false;
+        return TeamDataStorage.get(player.serverLevel()).isPersonalTeamOwner(currentTeam.getName(), player.getUUID());
+    }
+
+    public static PlayerTeam getOrCreatePersonalTeam(ServerPlayer player) {
+        MinecraftServer server = player.getServer();
+        if (server == null) return null;
+
+        Scoreboard scoreboard = server.getScoreboard();
+        TeamDataStorage storage = TeamDataStorage.get(player.serverLevel());
+        String teamName = getOrAllocatePersonalTeamName(scoreboard, storage, player.getUUID());
+
+        PlayerTeam personalTeam = scoreboard.getPlayerTeam(teamName);
+        if (personalTeam == null) {
+            personalTeam = scoreboard.addPlayerTeam(teamName);
+        }
+
+        storage.markPersonalTeam(teamName, player.getUUID());
+        configurePersonalTeam(personalTeam, player);
+        return personalTeam;
+    }
+
+    public static boolean joinPersonalTeam(ServerPlayer player, boolean notifyWithoutPreviousTeam) {
+        if (player == null || !BMTConfig.isPersonalTeamsEnabled()) return false;
+
+        PlayerTeam personalTeam = getOrCreatePersonalTeam(player);
+        if (personalTeam == null) return false;
+
+        TeamDataStorage storage = TeamDataStorage.get(player.serverLevel());
+        Scoreboard scoreboard = player.getServer().getScoreboard();
+        PlayerTeam previousTeam = getTeam(player);
+        boolean changedTeam = previousTeam == null || !previousTeam.getName().equals(personalTeam.getName());
+
+        if (previousTeam != null && changedTeam && storage.isCaptain(player)) {
+            storage.removeCaptain(previousTeam.getName());
+        }
+
+        removeOtherPlayerNamesFromPersonalTeam(scoreboard, personalTeam, player);
+        scoreboard.addPlayerToTeam(player.getScoreboardName(), personalTeam);
+        storage.setCaptain(personalTeam.getName(), player.getUUID());
+        storage.clearPersonalTeamEmptySince(personalTeam.getName());
+
+        if (changedTeam) {
+            if (previousTeam != null) {
+                player.displayClientMessage(Component.translatable(
+                        "better_mine_team.msg.personal_team_joined_left_previous",
+                        previousTeam.getDisplayName()
+                ).withStyle(ChatFormatting.GOLD), true);
+            } else if (notifyWithoutPreviousTeam) {
+                player.displayClientMessage(Component.translatable(
+                        "better_mine_team.msg.personal_team_joined"
+                ).withStyle(ChatFormatting.GOLD), true);
+            }
+        }
+
+        return true;
+    }
+
+    public static boolean leaveOwnedPersonalTeam(ServerPlayer player, boolean notify) {
+        if (player == null) return false;
+
+        TeamDataStorage storage = TeamDataStorage.get(player.serverLevel());
+        PlayerTeam currentTeam = getTeam(player);
+        if (!isOwnedPersonalTeam(currentTeam, player, storage)) {
+            return false;
+        }
+
+        player.serverLevel().getScoreboard().removePlayerFromTeam(player.getScoreboardName(), currentTeam);
+        storage.removeCaptain(currentTeam.getName());
+
+        if (notify) {
+            player.displayClientMessage(Component.translatable(
+                    "better_mine_team.msg.personal_team_left"
+            ).withStyle(ChatFormatting.GRAY), true);
+        }
+
+        return true;
+    }
+
+    public static void cleanupEmptyPersonalTeams(MinecraftServer server) {
+        if (server == null) return;
+
+        ServerLevel overworld = server.overworld();
+        TeamDataStorage storage = TeamDataStorage.get(overworld);
+        Scoreboard scoreboard = server.getScoreboard();
+        long currentTime = overworld.getGameTime();
+        long cleanupDelay = BMTConfig.getPersonalTeamCleanupDelay();
+
+        for (String teamName : storage.getPersonalTeamNames()) {
+            PlayerTeam team = scoreboard.getPlayerTeam(teamName);
+            if (team == null) {
+                storage.removePersonalTeam(teamName);
+                clearTeamRuntimeData(teamName);
+                continue;
+            }
+
+            if (!team.getPlayers().isEmpty()) {
+                storage.clearPersonalTeamEmptySince(teamName);
+                continue;
+            }
+
+            long emptySince = storage.getPersonalTeamEmptySince(teamName);
+            if (emptySince < 0L) {
+                storage.setPersonalTeamEmptySince(teamName, currentTime);
+                continue;
+            }
+
+            if (currentTime - emptySince >= cleanupDelay) {
+                scoreboard.removePlayerTeam(team);
+                storage.removePersonalTeam(teamName);
+                clearTeamRuntimeData(teamName);
+                BetterMineTeam.debug("Removed empty personal team {}", teamName);
+            }
+        }
+    }
+
+    private static String getOrAllocatePersonalTeamName(Scoreboard scoreboard, TeamDataStorage storage, UUID ownerId) {
+        String existingName = storage.getPersonalTeamName(ownerId);
+        if (existingName != null) {
+            return existingName;
+        }
+
+        String compactId = ownerId.toString().replace("-", "");
+        String baseName = PERSONAL_TEAM_PREFIX + compactId.substring(0, 16);
+        String candidate = baseName;
+        int suffix = 1;
+
+        while (true) {
+            PlayerTeam existingTeam = scoreboard.getPlayerTeam(candidate);
+            UUID existingOwner = storage.getPersonalTeamOwner(candidate);
+            if (existingTeam == null && existingOwner == null) {
+                return candidate;
+            }
+            if (existingOwner != null && existingOwner.equals(ownerId)) {
+                return candidate;
+            }
+            candidate = baseName + "_" + suffix++;
+        }
+    }
+
+    private static void configurePersonalTeam(PlayerTeam team, ServerPlayer player) {
+        team.setDisplayName(Component.literal(player.getScoreboardName()));
+        team.setColor(ChatFormatting.WHITE);
+        team.setAllowFriendlyFire(false);
+        team.setSeeFriendlyInvisibles(true);
+    }
+
+    private static void removeOtherPlayerNamesFromPersonalTeam(Scoreboard scoreboard, PlayerTeam team, ServerPlayer owner) {
+        for (String memberName : new ArrayList<>(team.getPlayers())) {
+            if (!memberName.equals(owner.getScoreboardName()) && !UUID_PATTERN.matcher(memberName).matches()) {
+                scoreboard.removePlayerFromTeam(memberName, team);
+            }
+        }
+    }
+
+    private static void clearTeamRuntimeData(String teamName) {
+        teamThreats.remove(teamName);
+        teamScanCooldowns.remove(teamName);
+        aggressiveScanTimestamps.remove(teamName);
+    }
+
     @Nullable
     public static PlayerTeam getTeam(Entity entity) {
         if (entity == null) return null;
@@ -375,6 +554,19 @@ public class TeamManager {
         Scoreboard scoreboard = server.getScoreboard();
         for (DyeColor color : ORIGINAL_DYE_COLORS) {
             PlayerTeam team = scoreboard.getPlayerTeam(getTeamName(color));
+            if (team == null) continue;
+
+            for (String memberName : team.getPlayers()) {
+                LivingEntity member = findLoadedTeamMember(server, memberName);
+                if (member != null) {
+                    syncGlowWithTeamDefault(member);
+                }
+            }
+        }
+
+        TeamDataStorage storage = TeamDataStorage.get(server.overworld());
+        for (String teamName : storage.getPersonalTeamNames()) {
+            PlayerTeam team = scoreboard.getPlayerTeam(teamName);
             if (team == null) continue;
 
             for (String memberName : team.getPlayers()) {

@@ -11,7 +11,9 @@ import net.minecraft.world.scores.PlayerTeam;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public class TeamDataStorage extends SavedData {
@@ -19,6 +21,9 @@ public class TeamDataStorage extends SavedData {
     private final Map<String, UUID> teamCaptains = new HashMap<>();
     private final Map<String, Boolean> teamGlowDefaults = new HashMap<>();
     private final Map<String, Integer> teamGlowRevisions = new HashMap<>();
+    private final Map<UUID, Boolean> personalTeamPreferences = new HashMap<>();
+    private final Map<String, UUID> personalTeamOwners = new HashMap<>();
+    private final Map<String, Long> personalTeamEmptySince = new HashMap<>();
 
     public static TeamDataStorage get(ServerLevel level) {
         ServerLevel overworld = level.getServer().overworld();
@@ -78,6 +83,75 @@ public class TeamDataStorage extends SavedData {
         return revision;
     }
 
+    // --- 个人队伍 ---
+
+    public boolean getPersonalTeamPreference(ServerPlayer player) {
+        return personalTeamPreferences.getOrDefault(player.getUUID(), BMTConfig.isAutoJoinPersonalTeamOnLogin());
+    }
+
+    public void setPersonalTeamPreference(UUID playerId, boolean enabled) {
+        personalTeamPreferences.put(playerId, enabled);
+        this.setDirty();
+    }
+
+    public void markPersonalTeam(String teamName, UUID ownerId) {
+        personalTeamOwners.put(teamName, ownerId);
+        this.setDirty();
+    }
+
+    public boolean isPersonalTeam(String teamName) {
+        return personalTeamOwners.containsKey(teamName);
+    }
+
+    public boolean isPersonalTeamOwner(String teamName, UUID playerId) {
+        UUID ownerId = personalTeamOwners.get(teamName);
+        return ownerId != null && ownerId.equals(playerId);
+    }
+
+    public UUID getPersonalTeamOwner(String teamName) {
+        return personalTeamOwners.get(teamName);
+    }
+
+    public String getPersonalTeamName(UUID ownerId) {
+        for (Map.Entry<String, UUID> entry : personalTeamOwners.entrySet()) {
+            if (entry.getValue().equals(ownerId)) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    public Set<String> getPersonalTeamNames() {
+        return new HashSet<>(personalTeamOwners.keySet());
+    }
+
+    public long getPersonalTeamEmptySince(String teamName) {
+        return personalTeamEmptySince.getOrDefault(teamName, -1L);
+    }
+
+    public void setPersonalTeamEmptySince(String teamName, long gameTime) {
+        personalTeamEmptySince.put(teamName, gameTime);
+        this.setDirty();
+    }
+
+    public void clearPersonalTeamEmptySince(String teamName) {
+        if (personalTeamEmptySince.remove(teamName) != null) {
+            this.setDirty();
+        }
+    }
+
+    public void removePersonalTeam(String teamName) {
+        boolean changed = false;
+        changed |= personalTeamOwners.remove(teamName) != null;
+        changed |= personalTeamEmptySince.remove(teamName) != null;
+        changed |= teamCaptains.remove(teamName) != null;
+        changed |= teamGlowDefaults.remove(teamName) != null;
+        changed |= teamGlowRevisions.remove(teamName) != null;
+        if (changed) {
+            this.setDirty();
+        }
+    }
+
     // --- NBT 读写 ---
 
     @Override
@@ -94,6 +168,18 @@ public class TeamDataStorage extends SavedData {
         CompoundTag glowRevisionsTag = new CompoundTag();
         teamGlowRevisions.forEach(glowRevisionsTag::putInt);
         tag.put("TeamGlowRevisions", glowRevisionsTag);
+
+        CompoundTag personalPreferencesTag = new CompoundTag();
+        personalTeamPreferences.forEach((playerId, enabled) -> personalPreferencesTag.putBoolean(playerId.toString(), enabled));
+        tag.put("PersonalTeamPreferences", personalPreferencesTag);
+
+        CompoundTag personalOwnersTag = new CompoundTag();
+        personalTeamOwners.forEach(personalOwnersTag::putUUID);
+        tag.put("PersonalTeamOwners", personalOwnersTag);
+
+        CompoundTag personalEmptySinceTag = new CompoundTag();
+        personalTeamEmptySince.forEach(personalEmptySinceTag::putLong);
+        tag.put("PersonalTeamEmptySince", personalEmptySinceTag);
         return tag;
     }
 
@@ -118,6 +204,29 @@ public class TeamDataStorage extends SavedData {
             CompoundTag glowRevisionsTag = tag.getCompound("TeamGlowRevisions");
             for (String key : glowRevisionsTag.getAllKeys()) {
                 data.teamGlowRevisions.put(key, glowRevisionsTag.getInt(key));
+            }
+        }
+        if (tag.contains("PersonalTeamPreferences")) {
+            CompoundTag preferencesTag = tag.getCompound("PersonalTeamPreferences");
+            for (String key : preferencesTag.getAllKeys()) {
+                try {
+                    data.personalTeamPreferences.put(UUID.fromString(key), preferencesTag.getBoolean(key));
+                } catch (IllegalArgumentException ignored) {
+                }
+            }
+        }
+        if (tag.contains("PersonalTeamOwners")) {
+            CompoundTag ownersTag = tag.getCompound("PersonalTeamOwners");
+            for (String key : ownersTag.getAllKeys()) {
+                UUID uuid = ownersTag.getUUID(key);
+                data.personalTeamOwners.put(key, uuid);
+                BetterMineTeam.debug("STORAGE: Loaded Personal Team: {} -> {}", key, uuid);
+            }
+        }
+        if (tag.contains("PersonalTeamEmptySince")) {
+            CompoundTag emptySinceTag = tag.getCompound("PersonalTeamEmptySince");
+            for (String key : emptySinceTag.getAllKeys()) {
+                data.personalTeamEmptySince.put(key, emptySinceTag.getLong(key));
             }
         }
         return data;

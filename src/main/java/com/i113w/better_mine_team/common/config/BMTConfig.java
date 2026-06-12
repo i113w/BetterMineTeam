@@ -50,6 +50,9 @@ public class BMTConfig {
 
     // 队伍逻辑与 AI 参数
     private static final ModConfigSpec.BooleanValue autoAssignCaptain;
+    private static final ModConfigSpec.BooleanValue enablePersonalTeams;
+    private static final ModConfigSpec.BooleanValue autoJoinPersonalTeamOnLogin;
+    private static final ModConfigSpec.IntValue personalTeamCleanupDelay;
     private static final ModConfigSpec.BooleanValue aggressiveGoalRemovalEnabled;
     private static final ModConfigSpec.ConfigValue<List<? extends String>> protectedGoalClasses;
     private static final ModConfigSpec.ConfigValue<List<? extends String>> blacklistedGoalClasses;
@@ -160,6 +163,21 @@ public class BMTConfig {
                 .comment("Automatically assign captain permission when a player joins a team that has no other players.")
                 .comment("This ignores non-player entities (mobs) in the team.")
                 .define("autoAssignCaptain", true);
+
+        enablePersonalTeams = builder
+                .comment("Enable per-player personal teams managed by Better Mine Team.")
+                .comment("When disabled, the inventory personal-team button is hidden and personal-team requests are rejected.")
+                .define("enablePersonalTeams", true);
+
+        autoJoinPersonalTeamOnLogin = builder
+                .comment("Default personal-team preference for players who have never changed the inventory personal-team button.")
+                .comment("If true, such players are automatically moved into their own personal team when joining the world.")
+                .define("autoJoinPersonalTeamOnLogin", false);
+
+        personalTeamCleanupDelay = builder
+                .comment("How long an empty Better Mine Team personal team waits before being deleted, in ticks.")
+                .comment("Only teams explicitly created and marked by this mod are eligible. Default: 12000 ticks (10 minutes).")
+                .defineInRange("personalTeamCleanupDelay", 12000, 20, 72000);
 
         aggressiveGoalRemovalEnabled = builder
                 .comment("When enabled, aggressive AI Goals (target selection and melee/ranged attack goals)")
@@ -476,6 +494,9 @@ public class BMTConfig {
     public static boolean isDebugEnabled() { return enableDebugLogging.get(); }
     public static double getRtsMovementSpeed() { return rtsMovementSpeed.get(); }
     public static boolean isAutoAssignCaptainEnabled() { return autoAssignCaptain.get(); }
+    public static boolean isPersonalTeamsEnabled() { return enablePersonalTeams.get(); }
+    public static boolean isAutoJoinPersonalTeamOnLogin() { return autoJoinPersonalTeamOnLogin.get(); }
+    public static int getPersonalTeamCleanupDelay() { return personalTeamCleanupDelay.get(); }
     public static boolean isTeammateCarryEnabled() { return enableTeammateCarry.get(); }
     public static boolean isSummonAutoJoinEnabled() { return enableSummonAutoJoin.get(); }
     public static boolean isSummonBlacklisted(EntityType<?> type) { return summonBlacklistCache.contains(type); }
