@@ -3,6 +3,7 @@ package com.i113w.better_mine_team.client.gui.team;
 // ... (Imports 保持不变, 确保包含 ImageButton, GuiGraphics 等)
 import com.google.common.collect.Maps;
 import com.i113w.better_mine_team.BetterMineTeam;
+import com.i113w.better_mine_team.client.gui.ClientTeamUiState;
 import com.i113w.better_mine_team.common.init.MTNetworkRegister;
 import com.i113w.better_mine_team.common.network.TeamActionPacket;
 import com.i113w.better_mine_team.common.team.TeamManager;
@@ -19,6 +20,10 @@ import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
 import net.minecraftforge.client.event.ScreenEvent;
+import com.i113w.better_mine_team.client.gui.asset.MTGuiIcons;
+import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.network.chat.Component;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 import java.util.function.Consumer;
@@ -30,16 +35,20 @@ public class TeamRender {
     private static final int SMALL_ICON_SIZE = 8;
     private static final int SMALL_ICON_SPACING = 2;
     private static final int CONFLUENCE_OFFSET = 22;
+    private static final int PERSONAL_BUTTON_SIZE = 20;
 
     private final AbstractContainerScreen<?> screen;
     private final Consumer<GuiEventListener> widgetAdder;
 
     private DynamicImageButton teamIcon;
     private DynamicImageButton teamPVPBtn;
+    private PersonalTeamIconButton personalTeamToggle;
     private final Map<String, DynamicImageButton> teamSmallIcons = Maps.newHashMap();
 
     private String lastTeamName = "";
     private boolean lastPvPState = false;
+    private boolean lastPersonalTeamsAvailable = false;
+    private boolean lastPersonalTeamEnabled = false;
     private String currentTeamColor = "white";
 
     private TeamRender(AbstractContainerScreen<?> screen, Consumer<GuiEventListener> widgetAdder) {
@@ -97,8 +106,19 @@ public class TeamRender {
 
         initSmallIcons(guiLeft, guiTop);
 
+        this.personalTeamToggle = new PersonalTeamIconButton(
+                guiLeft - PERSONAL_BUTTON_SIZE,
+                guiTop + 8 * (SMALL_ICON_SIZE + SMALL_ICON_SPACING) + MAIN_ICON_OFFSET,
+                MTGuiIcons.ICON_PERSONAL_TEAM_OFF,
+                button -> sendPersonalTeamPacket(!this.lastPersonalTeamEnabled),
+                Component.translatable("better_mine_team.gui.tooltip.personal_team")
+        );
+
+        addWidget(this.teamIcon);
+
         addWidget(this.teamIcon);
         addWidget(this.teamPVPBtn);
+        addWidget(this.personalTeamToggle);
         this.teamSmallIcons.values().forEach(this::addWidget);
 
         checkAndUpdateState();
@@ -147,9 +167,13 @@ public class TeamRender {
 
         String teamName = (team != null) ? team.getName() : "null";
         boolean pvpState = (team != null) && team.isAllowFriendlyFire();
+        boolean personalTeamsAvailable = ClientTeamUiState.isPersonalTeamsAvailable(player);
+        boolean personalTeamEnabled = ClientTeamUiState.isPersonalTeamEnabled(player);
 
         this.lastTeamName = teamName;
         this.lastPvPState = pvpState;
+        this.lastPersonalTeamsAvailable = personalTeamsAvailable;
+        this.lastPersonalTeamEnabled = personalTeamEnabled;
 
         if (team != null) {
             this.currentTeamColor = getTextureColorName(team);
@@ -162,6 +186,8 @@ public class TeamRender {
         } else if (this.teamIcon.visible) {
             this.teamPVPBtn.visible = true;
         }
+
+        updatePersonalTeamButton();
     }
 
     private void addWidget(Button btn) {
@@ -169,11 +195,27 @@ public class TeamRender {
     }
 
     private void sendChangeTeamPacket(String colorName) {
-        MTNetworkRegister.CHANNEL.sendToServer(new TeamActionPacket(0, colorName, false));
+        MTNetworkRegister.CHANNEL.sendToServer(new TeamActionPacket(TeamActionPacket.ACTION_CHANGE_TEAM, colorName, false));
     }
 
     private void sendPvPPacket(boolean enablePvP) {
-        MTNetworkRegister.CHANNEL.sendToServer(new TeamActionPacket(1, "", enablePvP));
+        MTNetworkRegister.CHANNEL.sendToServer(new TeamActionPacket(TeamActionPacket.ACTION_SET_PVP, "", enablePvP));
+    }
+
+    private void sendPersonalTeamPacket(boolean enabled) {
+        MTNetworkRegister.CHANNEL.sendToServer(new TeamActionPacket(TeamActionPacket.ACTION_SET_PERSONAL_TEAM, "", enabled));
+    }
+
+    private void updatePersonalTeamButton() {
+        if (this.personalTeamToggle == null) return;
+
+        this.personalTeamToggle.visible = this.lastPersonalTeamsAvailable;
+        this.personalTeamToggle.active = this.lastPersonalTeamsAvailable;
+        this.personalTeamToggle.setIcon(
+                this.lastPersonalTeamEnabled
+                        ? MTGuiIcons.ICON_PERSONAL_TEAM_ON
+                        : MTGuiIcons.ICON_PERSONAL_TEAM_OFF
+        );
     }
 
     private String getTextureColorName(PlayerTeam team) {
@@ -186,6 +228,55 @@ public class TeamRender {
             if (DyeColor.byName(name, null) != null) return name;
         }
         return "white";
+    }
+
+    // --- 内部类：个人队伍按钮（使用 MTGuiIcons 图集 + 20x20 按钮底座） ---
+    private static class PersonalTeamIconButton extends Button {
+        private MTGuiIcons icon;
+        private long lastPressTime = 0L;
+
+        private PersonalTeamIconButton(
+                int x,
+                int y,
+                MTGuiIcons icon,
+                OnPress onPress,
+                Component tooltip
+        ) {
+            super(x, y, PERSONAL_BUTTON_SIZE, PERSONAL_BUTTON_SIZE, Component.empty(), onPress, DEFAULT_NARRATION);
+            this.icon = icon;
+            this.setTooltip(Tooltip.create(tooltip));
+        }
+
+        public void setIcon(MTGuiIcons icon) {
+            this.icon = icon;
+        }
+
+        @Override
+        public void onPress() {
+            super.onPress();
+            this.lastPressTime = System.currentTimeMillis();
+        }
+
+        @Override
+        public void renderWidget(@NotNull GuiGraphics gfx, int mouseX, int mouseY, float partialTick) {
+            boolean hovered = mouseX >= getX() && mouseX < getX() + width
+                    && mouseY >= getY() && mouseY < getY() + height;
+            boolean pressed = System.currentTimeMillis() - this.lastPressTime < 120L;
+
+            MTGuiIcons base = !this.active
+                    ? MTGuiIcons.BUTTON_DISABLED
+                    : pressed
+                    ? MTGuiIcons.BUTTON_PRESSED
+                    : hovered
+                    ? MTGuiIcons.BUTTON_HOVER
+                    : MTGuiIcons.BUTTON_NORMAL;
+
+            base.render(gfx, getX(), getY());
+
+            if (this.icon != null) {
+                this.icon.render(gfx, getX() + 2, getY() + 2);
+            }
+        }
     }
 
     // --- 内部类：动态 ImageButton ---

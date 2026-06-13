@@ -62,6 +62,9 @@ public class BMTConfig {
     private static final ForgeConfigSpec.BooleanValue enableRTSMode;
 
     private static final ForgeConfigSpec.BooleanValue aggressiveGoalRemovalEnabled;
+    private static final ForgeConfigSpec.BooleanValue enablePersonalTeams;
+    private static final ForgeConfigSpec.BooleanValue autoJoinPersonalTeamOnLogin;
+    private static final ForgeConfigSpec.IntValue personalTeamCleanupDelay;
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> protectedGoalClasses;
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> blacklistedGoalClasses;
     private static final ForgeConfigSpec.BooleanValue blockUnauthorizedAttacks;
@@ -124,6 +127,18 @@ public class BMTConfig {
         builder.pop();
 
         builder.push("team_logic");
+        enablePersonalTeams = builder
+                .comment("Enable per-player personal teams managed by Better Mine Team.")
+                .comment("When disabled, the inventory personal-team button is hidden and personal-team requests are rejected.")
+                .define("enablePersonalTeams", true);
+        autoJoinPersonalTeamOnLogin = builder
+                .comment("Default personal-team preference for players who have never changed the inventory personal-team button.")
+                .comment("If true, such players are automatically moved into their own personal team when joining the world.")
+                .define("autoJoinPersonalTeamOnLogin", false);
+        personalTeamCleanupDelay = builder
+                .comment("How long an empty Better Mine Team personal team waits before being deleted, in ticks.")
+                .comment("Only teams explicitly created and marked by this mod are eligible. Default: 12000 ticks (10 minutes).")
+                .defineInRange("personalTeamCleanupDelay", 12000, 20, 72000);
         aggressiveGoalRemovalEnabled = builder.comment("When enabled, aggressive AI Goals will be removed from a mob's goalSelector when it joins a team.").define("aggressiveGoalRemovalEnabled", true);
         protectedGoalClasses = builder.comment("Fully-qualified class names of Goal subclasses that must NEVER be removed.").defineListAllowEmpty("protectedGoalClasses", List.of(), o -> o instanceof String);
         blacklistedGoalClasses = builder.comment("Fully-qualified class names of Goal subclasses that must ALWAYS be removed.").defineListAllowEmpty("blacklistedGoalClasses", List.of(), o -> o instanceof String);
@@ -364,6 +379,9 @@ public class BMTConfig {
     public static boolean isDebugEnabled() { return enableDebugLogging.get(); }
     public static boolean isAutoAssignCaptainEnabled() { return autoGrantCaptainOnJoin.get(); }
     public static boolean isAutoGrantCaptainEnabled() { return isAutoAssignCaptainEnabled(); }
+    public static boolean isPersonalTeamsEnabled() { return enablePersonalTeams.get(); }
+    public static boolean isAutoJoinPersonalTeamOnLogin() { return autoJoinPersonalTeamOnLogin.get(); }
+    public static int getPersonalTeamCleanupDelay() { return personalTeamCleanupDelay.get(); }
 
     public static boolean isTeammateCarryEnabled() { return enableTeammateCarry.get(); }
 

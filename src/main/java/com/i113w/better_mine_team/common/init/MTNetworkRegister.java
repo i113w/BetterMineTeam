@@ -15,7 +15,7 @@ import java.util.Optional;
 
 public class MTNetworkRegister {
 
-    private static final String PROTOCOL_VERSION = "3";
+    private static final String PROTOCOL_VERSION = "4";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(BetterMineTeam.MODID, "main"),
@@ -108,6 +108,14 @@ public class MTNetworkRegister {
                 S2C_SyncTeamLordPacket::encode,
                 S2C_SyncTeamLordPacket::decode,
                 S2C_SyncTeamLordPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT)
+        );
+
+        CHANNEL.registerMessage(id++,
+                S2C_PersonalTeamStatePacket.class,
+                S2C_PersonalTeamStatePacket::encode,
+                S2C_PersonalTeamStatePacket::decode,
+                S2C_PersonalTeamStatePacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_CLIENT)
         );
     }

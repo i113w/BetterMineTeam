@@ -33,6 +33,7 @@ public class ServerEventSubscriber {
         if (server.getTickCount() % 100 == 0) {
             TeamManager.cleanupExpiredHateData(server);
             TeamManager.syncLoadedTeamMemberGlow(server);
+            TeamManager.cleanupEmptyPersonalTeams(server);
         }
     }
 
