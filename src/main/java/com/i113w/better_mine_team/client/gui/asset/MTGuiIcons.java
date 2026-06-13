@@ -23,6 +23,8 @@ public enum MTGuiIcons {
     ICON_LEVEL_0(119, 21, 16, 16), // 被动 (Passive)
     ICON_LEVEL_1(136, 21, 16, 16), // 警戒 (Guard)
     ICON_LEVEL_2(153, 21, 16, 16), // 侵略 (Aggressive)
+    ICON_PERSONAL_TEAM_OFF(170, 21, 16, 16),
+    ICON_PERSONAL_TEAM_ON(187, 21, 16, 16),
 
     // --- 2. 滚动条组件 ---
     SCROLL_TRACK(0, 40, 12, 152),
