@@ -202,21 +202,21 @@ public class ServerPacketHandler {
 
     private static void executeRecruitCommand(ServerPlayer player, List<Mob> units) {
         if (!com.i113w.better_mine_team.common.team.TeamPermissions.hasOverridePermission(player)) {
-            player.displayClientMessage(
-                    Component.translatable("better_mine_team.msg.permission_denied").withStyle(ChatFormatting.RED), true);
+            player.sendOverlayMessage(
+                    Component.translatable("better_mine_team.msg.permission_denied").withStyle(ChatFormatting.RED));
             return;
         }
 
         PlayerTeam playerTeam = TeamManager.getTeam(player);
         if (playerTeam == null) {
-            player.displayClientMessage(
+            player.sendOverlayMessage(
                     Component.translatable("message.better_mine_team.error.no_team_specified", player.getName())
-                            .withStyle(ChatFormatting.RED), true);
+                            .withStyle(ChatFormatting.RED));
             return;
         }
 
         int successCount = 0;
-        net.minecraft.world.scores.Scoreboard scoreboard = player.getScoreboard();
+        net.minecraft.world.scores.Scoreboard scoreboard = player.level().getScoreboard();
 
         for (Mob mob : units) {
             if (TeamManager.getTeam(mob) != null) continue; // 已有队伍，跳过
@@ -254,13 +254,13 @@ public class ServerPacketHandler {
         }
 
         if (successCount > 0) {
-            player.displayClientMessage(
+            player.sendOverlayMessage(
                     Component.translatable("better_mine_team.msg.recruit_success", successCount)
-                            .withStyle(ChatFormatting.GREEN), true);
+                            .withStyle(ChatFormatting.GREEN));
         } else {
-            player.displayClientMessage(
+            player.sendOverlayMessage(
                     Component.translatable("better_mine_team.msg.recruit_fail_no_target")
-                            .withStyle(ChatFormatting.YELLOW), true);
+                            .withStyle(ChatFormatting.YELLOW));
         }
     }
 

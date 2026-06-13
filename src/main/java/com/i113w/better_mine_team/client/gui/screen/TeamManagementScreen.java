@@ -9,19 +9,19 @@ import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.network.TeamManagementPayload;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import com.i113w.better_mine_team.common.team.TeamPermissions;
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.scores.PlayerTeam;
 import net.neoforged.fml.ModList;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -33,7 +33,7 @@ public class TeamManagementScreen extends Screen {
     private final java.util.Map<java.util.UUID, TeamMemberEntry> entryCache = new java.util.HashMap<>();
     private String lastKnownTeamName = null;
 
-    private static final ResourceLocation BG_TEXTURE = ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "textures/gui/management_bg.png");
+    private static final Identifier BG_TEXTURE = Identifier.fromNamespaceAndPath(BetterMineTeam.MODID, "textures/gui/management_bg.png");
 
     // 1. 纹理尺寸 (256x256)
     private static final int TEXTURE_SIZE = 256;
@@ -112,29 +112,18 @@ public class TeamManagementScreen extends Screen {
     }
 
     @Override
-    public void render(@NotNull GuiGraphics gfx, int mouseX, int mouseY, float partialTick) {
-        // 1. 强制像素清晰
-        Minecraft.getInstance().getTextureManager().getTexture(BG_TEXTURE).setFilter(false, false);
-
-        // 2. 绘制背景 (256x256)
-        RenderSystem.enableBlend();
-        gfx.blit(BG_TEXTURE, this.guiLeft, this.guiTop, 0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
-        RenderSystem.disableBlend();
-
-        // 3. 绘制组件
-        super.render(gfx, mouseX, mouseY, partialTick);
-
-        // 4. 绘制文字
+    public void extractRenderState(@NotNull GuiGraphicsExtractor gfx, int mouseX, int mouseY, float partialTick) {
+        super.extractRenderState(gfx, mouseX, mouseY, partialTick);
         renderLabels(gfx);
     }
 
-    private void renderLabels(GuiGraphics gfx) {
+    private void renderLabels(GuiGraphicsExtractor gfx) {
         // --- 标题：放在背景板上方 ---
         // 计算文字宽度以居中
         int titleWidth = this.font.width(this.title);
         int titleX = this.guiLeft + (CONTENT_WIDTH - titleWidth) / 2;
         // guiTop - 12 让文字浮在背景板上面
-        gfx.drawString(this.font, this.title, titleX, this.guiTop - 12, 0xFFFFFF, true);
+        gfx.text(this.font, this.title, titleX, this.guiTop - 12, 0xFFFFFFFF, true);
 
         // --- 队伍名称：放在背景板下方 ---
         if (this.minecraft != null && this.minecraft.player != null) {
@@ -145,14 +134,16 @@ public class TeamManagementScreen extends Screen {
                 int textX = this.guiLeft + (CONTENT_WIDTH - textWidth) / 2;
 
                 // guiTop + CONTENT_HEIGHT + 4 让文字浮在背景板下面
-                gfx.drawString(this.font, teamText, textX, this.guiTop + CONTENT_HEIGHT + 4, 0xAAAAAA, true);
+                gfx.text(this.font, teamText, textX, this.guiTop + CONTENT_HEIGHT + 4, 0xFFAAAAAA, true);
             }
         }
     }
 
-    // 修复 IDE 警告：添加 @NotNull
     @Override
-    public void renderBackground(@NotNull GuiGraphics gfx, int mouseX, int mouseY, float partialTick) {}
+    public void extractBackground(@NotNull GuiGraphicsExtractor gfx, int mouseX, int mouseY, float partialTick) {
+        gfx.blit(RenderPipelines.GUI_TEXTURED, BG_TEXTURE, this.guiLeft, this.guiTop, 0, 0,
+                TEXTURE_SIZE, TEXTURE_SIZE, TEXTURE_SIZE, TEXTURE_SIZE);
+    }
 
     private void refreshMembers() {
         if (this.minecraft == null || this.minecraft.level == null || this.minecraft.player == null) return;
@@ -205,7 +196,7 @@ public class TeamManagementScreen extends Screen {
                 TeamMemberEntry entry = entryCache.get(uuid);
                 // TeamMemberList 需要暴露 removeEntry 方法，或者我们直接操作 children
                 // 假设 TeamMemberList 继承自 ObjectSelectionList，它有 removeEntry 方法
-                this.memberList.removeEntry(entry);
+                this.memberList.removeMember(entry);
                 return true;
             }
             return false;
@@ -223,9 +214,7 @@ public class TeamManagementScreen extends Screen {
 
         // 3. 仅当列表发生变动时，重新排序并保持滚动位置
         if (removedAny || addedAny) {
-            double scrollAmount = this.memberList.getScrollAmount();
             sortMembers();
-            this.memberList.setScrollAmount(scrollAmount);
         }
     }
 
@@ -247,11 +236,7 @@ public class TeamManagementScreen extends Screen {
             return entity1.getName().getString().compareToIgnoreCase(entity2.getName().getString());
         });
 
-        // 清空并重新添加 (ObjectSelectionList 没有直接的 replaceEntries，只能 clear + add)
-        this.memberList.clearMembers();
-        for (TeamMemberEntry entry : entries) {
-            this.memberList.addMember(entry);
-        }
+        this.memberList.replaceMembers(entries);
     }
 
     private int tickCounter = 0;
@@ -279,7 +264,7 @@ public class TeamManagementScreen extends Screen {
         boolean newState = shouldEnableTeamGlow();
         applyVisibleTeamGlow(newState);
         refreshTeamGlowButton();
-        PacketDistributor.sendToServer(new TeamManagementPayload(
+        ClientPacketDistributor.sendToServer(new TeamManagementPayload(
                 TeamManagementPayload.ACTION_SET_TEAM_GLOW,
                 this.minecraft.player.getId(),
                 String.valueOf(newState)));
@@ -326,7 +311,7 @@ public class TeamManagementScreen extends Screen {
     private void requestCaptainStatus() {
         if (this.minecraft == null || this.minecraft.player == null) return;
         ClientTeamUiState.setLocalPlayerCaptain(this.minecraft.player, false);
-        PacketDistributor.sendToServer(new TeamManagementPayload(
+        ClientPacketDistributor.sendToServer(new TeamManagementPayload(
                 TeamManagementPayload.ACTION_REQUEST_CAPTAIN_STATUS,
                 this.minecraft.player.getId(),
                 ""));

@@ -48,7 +48,7 @@ public class TeamFollowCaptainGoal extends Goal implements TeamGoal {
     public boolean canUse() {
         if (debugCooldown > 0) debugCooldown--;
 
-        boolean isFollowEnabled = this.mob.getPersistentData().getBoolean("bmt_follow_enabled");
+        boolean isFollowEnabled = this.mob.getPersistentData().getBooleanOr("bmt_follow_enabled", false);
         if (!isFollowEnabled) return false;
 
         PlayerTeam mobTeam = TeamManager.getTeam(this.mob);
@@ -170,7 +170,7 @@ public class TeamFollowCaptainGoal extends Goal implements TeamGoal {
             return false;
         }
 
-        this.mob.moveTo((double) x + 0.5D, (double) y, (double) z + 0.5D, this.mob.getYRot(), this.mob.getXRot());
+        this.mob.snapTo((double) x + 0.5D, (double) y, (double) z + 0.5D, this.mob.getYRot(), this.mob.getXRot());
         this.navigation.stop();
         return true;
     }
@@ -193,7 +193,7 @@ public class TeamFollowCaptainGoal extends Goal implements TeamGoal {
         // 3. 脚下必须是实体方块，不能悬空
         BlockPos below = pos.below();
         BlockState belowState = level.getBlockState(below);
-        if (!belowState.isSolidRender(level, below)) {
+        if (!belowState.isSolidRender()) {
             return false;
         }
 

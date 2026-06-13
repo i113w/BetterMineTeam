@@ -1,13 +1,12 @@
 package com.i113w.better_mine_team.common.rts.data;
 
 import com.i113w.better_mine_team.common.network.data.CommandType;
-import net.minecraft.core.HolderLookup;
-import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.common.util.INBTSerializable;
-import org.jetbrains.annotations.NotNull;
+import net.neoforged.neoforge.common.util.ValueIOSerializable;
 
-public class RTSUnitData implements INBTSerializable<CompoundTag> {
+public class RTSUnitData implements ValueIOSerializable {
 
     private CommandType currentCommand = CommandType.STOP;
     private Vec3 targetPos = Vec3.ZERO;
@@ -42,32 +41,29 @@ public class RTSUnitData implements INBTSerializable<CompoundTag> {
     public int getTargetEntityId() { return targetEntityId; }
     public boolean isControlled() { return isRtsControlled; }
 
-    // === NBT ===
     @Override
-    public @NotNull CompoundTag serializeNBT(HolderLookup.@NotNull Provider provider) {
-        CompoundTag tag = new CompoundTag();
-        tag.putString("Cmd", currentCommand.name());
-        tag.putDouble("Tx", targetPos.x);
-        tag.putDouble("Ty", targetPos.y);
-        tag.putDouble("Tz", targetPos.z);
-        tag.putDouble("Ax", anchorPos.x);
-        tag.putDouble("Ay", anchorPos.y);
-        tag.putDouble("Az", anchorPos.z);
-        tag.putInt("TEnt", targetEntityId);
-        tag.putBoolean("Ctrl", isRtsControlled);
-        return tag;
+    public void serialize(ValueOutput output) {
+        output.putString("Cmd", currentCommand.name());
+        output.putDouble("Tx", targetPos.x);
+        output.putDouble("Ty", targetPos.y);
+        output.putDouble("Tz", targetPos.z);
+        output.putDouble("Ax", anchorPos.x);
+        output.putDouble("Ay", anchorPos.y);
+        output.putDouble("Az", anchorPos.z);
+        output.putInt("TEnt", targetEntityId);
+        output.putBoolean("Ctrl", isRtsControlled);
     }
 
     @Override
-    public void deserializeNBT(HolderLookup.@NotNull Provider provider, @NotNull CompoundTag tag) {
+    public void deserialize(ValueInput input) {
         try {
-            this.currentCommand = CommandType.valueOf(tag.getString("Cmd"));
+            this.currentCommand = CommandType.valueOf(input.getStringOr("Cmd", CommandType.STOP.name()));
         } catch (Exception e) {
             this.currentCommand = CommandType.STOP;
         }
-        this.targetPos = new Vec3(tag.getDouble("Tx"), tag.getDouble("Ty"), tag.getDouble("Tz"));
-        this.anchorPos = new Vec3(tag.getDouble("Ax"), tag.getDouble("Ay"), tag.getDouble("Az"));
-        this.targetEntityId = tag.getInt("TEnt");
-        this.isRtsControlled = tag.getBoolean("Ctrl");
+        this.targetPos = new Vec3(input.getDoubleOr("Tx", 0.0), input.getDoubleOr("Ty", 0.0), input.getDoubleOr("Tz", 0.0));
+        this.anchorPos = new Vec3(input.getDoubleOr("Ax", 0.0), input.getDoubleOr("Ay", 0.0), input.getDoubleOr("Az", 0.0));
+        this.targetEntityId = input.getIntOr("TEnt", -1);
+        this.isRtsControlled = input.getBooleanOr("Ctrl", false);
     }
 }

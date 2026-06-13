@@ -103,7 +103,7 @@ public class AggressiveScanGoal extends TargetGoal implements TeamGoal {
         if (candidate instanceof Mob m && m.isNoAi()) return false;
         if (candidate instanceof Player p && (p.isCreative() || p.isSpectator())) return false;
 
-        String typeId = candidate.getType().builtInRegistryHolder().key().location().toString();
+        String typeId = candidate.getType().builtInRegistryHolder().key().identifier().toString();
         if (BMTConfig.getAggressiveEntityBlacklist().contains(typeId)) return false;
 
         return aggressiveLevel == 1 ? isLevel1Target(candidate, myTeam) : isLevel2Target(candidate);
@@ -119,6 +119,6 @@ public class AggressiveScanGoal extends TargetGoal implements TeamGoal {
 
     private boolean isLevel2Target(LivingEntity candidate) {
         // 如果该实体存在于 Tag 黑名单中，则忽略
-        return !candidate.getType().is(ModTags.Entities.IGNORED_BY_LEVEL2_SCAN);
+        return !candidate.getType().builtInRegistryHolder().is(ModTags.Entities.IGNORED_BY_LEVEL2_SCAN);
     }
 }

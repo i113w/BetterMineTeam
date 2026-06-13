@@ -6,12 +6,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 public record S2C_SyncTeamLordPayload(boolean hasPermission) implements CustomPacketPayload {
 
-    public static final Type<S2C_SyncTeamLordPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "sync_team_lord"));
+    public static final Type<S2C_SyncTeamLordPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(BetterMineTeam.MODID, "sync_team_lord"));
 
     public static final StreamCodec<ByteBuf, S2C_SyncTeamLordPayload> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.BOOL, S2C_SyncTeamLordPayload::hasPermission,

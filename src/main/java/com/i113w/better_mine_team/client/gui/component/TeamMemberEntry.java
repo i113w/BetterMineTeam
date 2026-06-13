@@ -7,19 +7,16 @@ import com.i113w.better_mine_team.client.rts.BmtRTSEvents;
 import com.i113w.better_mine_team.common.network.TeamManagementPayload;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.ObjectSelectionList;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.scores.PlayerTeam;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import org.jetbrains.annotations.NotNull;
-import org.joml.Quaternionf;
-import org.joml.Vector3f;
 
 public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> {
 
@@ -47,12 +44,17 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
     }
 
     @Override
-    public void render(@NotNull GuiGraphics gfx, int index, int top, int left, int width, int height, int mouseX, int mouseY, boolean isHovered, float partialTick) {
+    public void extractContent(@NotNull GuiGraphicsExtractor gfx, int mouseX, int mouseY, boolean isHovered, float partialTick) {
+        int left = this.getContentX();
+        int top = this.getContentY();
+        int width = this.getContentWidth();
+        int height = this.getContentHeight();
+
         // 1. 背景渲染 (选中/悬停状态)
         boolean isSelected = ClientSelectionManager.isSelected(member);
         if (isSelected) {
             gfx.fill(left, top, left + width, top + height, 0x40FFFFFF); // 选中高亮
-            gfx.renderOutline(left, top, width, height, 0xFFFFFF00);
+            gfx.outline(left, top, width, height, 0xFFFFFF00);
         } else if (isHovered) {
             gfx.fill(left, top, left + width, top + height, 0x20FFFFFF); // 悬停高亮
         }
@@ -61,8 +63,8 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
 
         // 3. 名字渲染
         int textLeft = left + 10;
-        int nameColor = isSelected ? 0xFFFF00 : 0xFFFFFF;
-        gfx.drawString(Minecraft.getInstance().font, member.getDisplayName(), textLeft, top + 6, nameColor);
+        int nameColor = isSelected ? 0xFFFFFF00 : 0xFFFFFFFF;
+        gfx.text(Minecraft.getInstance().font, member.getDisplayName(), textLeft, top + 6, nameColor);
 
         // 4. 【修改】HP 显示格式: "HP: 20/20"
         float currentHp = member.getHealth();
@@ -78,9 +80,9 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
         }
 
         // 颜色逻辑：血量低变红
-        int hpColor = (maxHp > 0 && currentHp / maxHp < 0.3) ? 0xFF5555 : 0xAAAAAA;
+        int hpColor = (maxHp > 0 && currentHp / maxHp < 0.3) ? 0xFFFF5555 : 0xFFAAAAAA;
 
-        gfx.drawString(Minecraft.getInstance().font, cachedStatus, textLeft, top + 18, hpColor);
+        gfx.text(Minecraft.getInstance().font, cachedStatus, textLeft, top + 18, hpColor);
 
         // 5. 快捷按钮渲染 (仅队长可见，且不能对自己操作)
         // 我们需要判断当前客户端玩家是否是队长
@@ -115,7 +117,7 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
         return ClientTeamUiState.isLocalPlayerCaptain(player);
     }
 
-    private void renderMappedButton(GuiGraphics gfx, int x, int y, int mouseX, int mouseY, MTGuiIcons icon) {
+    private void renderMappedButton(GuiGraphicsExtractor gfx, int x, int y, int mouseX, int mouseY, MTGuiIcons icon) {
         boolean hovered = mouseX >= x && mouseX < x + BTN_SIZE && mouseY >= y && mouseY < y + BTN_SIZE;
         if (hovered) {
             MTGuiIcons.BUTTON_HOVER.render(gfx, x, y);
@@ -125,7 +127,7 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
         icon.render(gfx, x + 2, y + 2);
     }
 
-    private void renderItemButton(GuiGraphics gfx, int x, int y, int mouseX, int mouseY, ItemStack itemStack, boolean active) {
+    private void renderItemButton(GuiGraphicsExtractor gfx, int x, int y, int mouseX, int mouseY, ItemStack itemStack, boolean active) {
         boolean hovered = mouseX >= x && mouseX < x + BTN_SIZE && mouseY >= y && mouseY < y + BTN_SIZE;
         if (active) {
             gfx.fill(x - 1, y - 1, x + BTN_SIZE + 1, y + BTN_SIZE + 1, 0xFFFFD700);
@@ -135,38 +137,12 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
         } else {
             MTGuiIcons.BUTTON_NORMAL.render(gfx, x, y);
         }
-        gfx.renderItem(itemStack, x + 2, y + 2);
-    }
-
-    private void renderEntity(GuiGraphics gfx, int x, int y, int scale, float mouseX, float mouseY, LivingEntity entity) {
-        // ... 保持原有的 3D 渲染代码不变 ...
-        float f = (float) Math.atan(mouseX / 40.0F);
-        float f1 = (float) Math.atan(mouseY / 40.0F);
-        Quaternionf quaternionf = (new Quaternionf()).rotateZ((float) Math.PI);
-        Quaternionf quaternionf1 = (new Quaternionf()).rotateX(f1 * 20.0F * ((float) Math.PI / 180F));
-        quaternionf.mul(quaternionf1);
-        float yBodyRot = entity.yBodyRot;
-        float yHeadRot = entity.yHeadRot;
-        float xRot = entity.getXRot();
-        float yRotO = entity.yRotO;
-        float xRotO = entity.xRotO;
-        entity.yBodyRot = 180.0F + f * 20.0F;
-        entity.setYRot(180.0F + f * 40.0F);
-        entity.setXRot(-f1 * 20.0F);
-        entity.yHeadRot = entity.getYRot();
-        entity.yRotO = entity.getYRot();
-        entity.xRotO = entity.getXRot();
-        InventoryScreen.renderEntityInInventory(gfx, (float) x, (float) y, (float) scale, new Vector3f(0, 0, 0), quaternionf, quaternionf1, entity);
-        entity.yBodyRot = yBodyRot;
-        entity.setYRot(yHeadRot);
-        entity.setXRot(xRot);
-        entity.yHeadRot = yHeadRot;
-        entity.yRotO = yRotO;
-        entity.xRotO = xRotO;
+        gfx.item(itemStack, x + 2, y + 2);
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        double mouseX = event.x();
         int listRight = parent.getX() + parent.getRowWidth();
         double distFromRight = listRight - mouseX;
 
@@ -178,7 +154,7 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
         if (amICaptain && !isMe) {
             // [B] 踢出 (Kick) - 距离右边 4~24
             if (distFromRight >= 4 && distFromRight <= 24) {
-                PacketDistributor.sendToServer(new TeamManagementPayload(TeamManagementPayload.ACTION_KICK, member.getId(), ""));
+                ClientPacketDistributor.sendToServer(new TeamManagementPayload(TeamManagementPayload.ACTION_KICK, member.getId(), ""));
                 return true;
             }
 
@@ -188,7 +164,7 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
                 }
                 boolean newState = !TeamManager.isGlowEnabled(member);
                 ClientTeamUiState.setClientGlowState(member, newState);
-                PacketDistributor.sendToServer(new TeamManagementPayload(
+                ClientPacketDistributor.sendToServer(new TeamManagementPayload(
                         TeamManagementPayload.ACTION_SET_GLOW,
                         member.getId(),
                         String.valueOf(newState)));
@@ -197,7 +173,7 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
 
             // [A] 任命队长 (Set Captain) - 距离右边 26~46
             if (member instanceof Player && distFromRight >= 26 && distFromRight <= 46) {
-                PacketDistributor.sendToServer(new TeamManagementPayload(TeamManagementPayload.ACTION_SET_CAPTAIN, member.getId(), ""));
+                ClientPacketDistributor.sendToServer(new TeamManagementPayload(TeamManagementPayload.ACTION_SET_CAPTAIN, member.getId(), ""));
                 return true;
             }
         }
@@ -207,8 +183,8 @@ public class TeamMemberEntry extends ObjectSelectionList.Entry<TeamMemberEntry> 
         // 逻辑：发送 OPEN_INVENTORY 包，服务端会打开 EntityDetailsMenu
         // 注意：如果是玩家队友，目前服务端逻辑是打开末影箱，如果是生物队友，打开新界面
         if (!isMe) {
-            PacketDistributor.sendToServer(new TeamManagementPayload(TeamManagementPayload.ACTION_OPEN_INVENTORY, member.getId(), ""));
-            if (Screen.hasShiftDown()) {
+            ClientPacketDistributor.sendToServer(new TeamManagementPayload(TeamManagementPayload.ACTION_OPEN_INVENTORY, member.getId(), ""));
+            if (event.hasShiftDown()) {
                 ClientSelectionManager.select(member.getId());
             } else {
                 ClientSelectionManager.clear();

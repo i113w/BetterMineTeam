@@ -5,7 +5,6 @@ import com.i113w.better_mine_team.common.network.OpenTeamGuiPayload;
 import com.i113w.better_mine_team.common.network.S2C_SyncTeamLordPayload;
 import com.i113w.better_mine_team.common.team.TeamDataStorage;
 import com.i113w.better_mine_team.common.team.TeamPermissions;
-import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -18,7 +17,8 @@ import net.minecraft.commands.arguments.TeamArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.players.GameProfileCache;
+import net.minecraft.server.permissions.LevelBasedPermissionSet;
+import net.minecraft.server.permissions.PermissionLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
@@ -31,7 +31,6 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -60,7 +59,7 @@ public class ManageTeamCommand {
 
                         // --- Set (Requires OP Level 4) ---
                         .then(Commands.literal("set")
-                                .requires(source -> source.hasPermission(4))
+                                .requires(ManageTeamCommand::hasOpLevel4)
 
                                 // 1. Set Captain
                                 .then(Commands.literal("captain")
@@ -128,6 +127,11 @@ public class ManageTeamCommand {
                                 )
                         )
         );
+    }
+
+    private static boolean hasOpLevel4(CommandSourceStack source) {
+        return source.permissions() instanceof LevelBasedPermissionSet levelSet
+                && levelSet.level().isEqualOrHigherThan(PermissionLevel.OWNERS);
     }
 
     // --- 逻辑实现: Set Captain ---
@@ -253,14 +257,7 @@ public class ManageTeamCommand {
     }
 
     private static String resolvePlayerName(MinecraftServer server, UUID uuid) {
-        String name = uuid.toString();
-        GameProfileCache cache = server.getProfileCache();
-        if (cache != null) {
-            Optional<GameProfile> profile = cache.get(uuid);
-            if (profile.isPresent()) {
-                name = profile.get().getName();
-            }
-        }
-        return name;
+        ServerPlayer onlinePlayer = server.getPlayerList().getPlayer(uuid);
+        return onlinePlayer != null ? onlinePlayer.getScoreboardName() : uuid.toString();
     }
 }

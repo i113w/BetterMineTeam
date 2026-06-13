@@ -8,13 +8,11 @@ import com.i113w.better_mine_team.common.team.TeamManager;
 import com.i113w.better_mine_team.common.team.TeamPermissions;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.ChatFormatting;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -51,7 +49,7 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
     public static final int ACTION_SYNC_CAPTAIN_STATUS    = 14;
 
     public static final Type<TeamManagementPayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "team_manage"));
+            Identifier.fromNamespaceAndPath(BetterMineTeam.MODID, "team_manage"));
 
     public static final StreamCodec<ByteBuf, TeamManagementPayload> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.VAR_INT, TeamManagementPayload::actionType,
@@ -66,20 +64,15 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
         return TYPE;
     }
 
-    public static void handle(final TeamManagementPayload payload, final IPayloadContext context) {
-        if (context.flow() == PacketFlow.CLIENTBOUND) {
-            context.enqueueWork(() -> ClientHandler.handle(payload, context));
-        } else {
-            serverHandle(payload, context);
-        }
+    public static void clientHandle(final TeamManagementPayload payload, final IPayloadContext context) {
+        context.enqueueWork(() -> ClientHandler.handle(payload, context));
     }
 
     // ── Server handler ───────────────────────────────────────────────────────
 
-    private static void serverHandle(final TeamManagementPayload payload, final IPayloadContext context) {
-        context.enqueueWork(() -> {
+    public static void serverHandle(final TeamManagementPayload payload, final IPayloadContext context) {        context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer player)) return;
-            ServerLevel level = player.serverLevel();
+            ServerLevel level = player.level();
             PlayerTeam playerTeam = TeamManager.getTeam(player);
 
             if (payload.actionType == ACTION_REQUEST_CAPTAIN_STATUS) {
@@ -111,16 +104,16 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
                     case ACTION_TOGGLE_FOLLOW -> {
                         if (!isCaptain) { sendPermissionError(player); return; }
                         if (target instanceof Mob mob && mob.isAlive()) {
-                            boolean current  = mob.getPersistentData().getBoolean("bmt_follow_enabled");
+                            boolean current  = mob.getPersistentData().getBooleanOr("bmt_follow_enabled", false);
                             boolean newState = !current;
                             mob.getPersistentData().putBoolean("bmt_follow_enabled", newState);
 
                             PacketDistributor.sendToPlayersTrackingEntityAndSelf(mob,
                                     new TeamManagementPayload(ACTION_SYNC_FOLLOW_STATE, mob.getId(), String.valueOf(newState)));
 
-                            player.displayClientMessage(Component.translatable(
+                            player.sendOverlayMessage(Component.translatable(
                                     newState ? "better_mine_team.msg.follow_enabled"
-                                            : "better_mine_team.msg.follow_disabled"), true);
+                                            : "better_mine_team.msg.follow_disabled"));
                         }
                     }
                     case ACTION_KICK -> {
@@ -148,16 +141,16 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
                             storage.setCaptain(playerTeam.getName(), targetPlayer.getUUID());
 
                             if (oldCaptainId != null && !oldCaptainId.equals(targetPlayer.getUUID())) {
-                                ServerPlayer oldCaptain = player.getServer().getPlayerList().getPlayer(oldCaptainId);
+                                ServerPlayer oldCaptain = player.level().getServer().getPlayerList().getPlayer(oldCaptainId);
                                 if (oldCaptain != null) {
                                     syncCaptainStatus(oldCaptain, false);
                                 }
                             }
                             syncCaptainStatus(targetPlayer, true);
 
-                            player.displayClientMessage(
+                            player.sendOverlayMessage(
                                     Component.translatable("better_mine_team.msg.captain_transferred",
-                                            targetPlayer.getName()), true);
+                                            targetPlayer.getName()));
                         }
                     }
                     case ACTION_OPEN_INVENTORY -> {
@@ -171,22 +164,22 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
                                                 targetPlayer.getDisplayName()),
                                         buf -> buf.writeInt(targetPlayer.getId()));
                             } else {
-                                player.displayClientMessage(
+                                player.sendOverlayMessage(
                                         Component.translatable("better_mine_team.message.permission_lord_required")
-                                                .withStyle(ChatFormatting.RED), true);
+                                                .withStyle(ChatFormatting.RED));
                             }
                         } else if (target instanceof LivingEntity livingTarget && livingTarget.isAlive()) {
 
                             // 检查实体详情面板黑名单
                             boolean hasAdmin = TeamPermissions.hasOverridePermission(player);
                             if (!hasAdmin && BMTConfig.isEntityDetailsScreenBlacklisted(livingTarget.getType())) {
-                                player.displayClientMessage(
+                                player.sendOverlayMessage(
                                         Component.translatable("better_mine_team.msg.details_blacklisted")
-                                                .withStyle(ChatFormatting.RED), true);
+                                                .withStyle(ChatFormatting.RED));
                                 return;
                             }
 
-                            boolean followState = livingTarget.getPersistentData().getBoolean("bmt_follow_enabled");
+                            boolean followState = livingTarget.getPersistentData().getBooleanOr("bmt_follow_enabled", false);
                             PacketDistributor.sendToPlayer(player,
                                     new TeamManagementPayload(ACTION_SYNC_FOLLOW_STATE, livingTarget.getId(),
                                             String.valueOf(followState)));
@@ -205,7 +198,7 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
                                     new SimpleMenuProvider(
                                             (id, inv, p) -> new EntityDetailsMenu(id, inv, livingTarget),
                                             livingTarget.getDisplayName()),
-                                    buf -> buf.writeInt(livingTarget.getId()));
+                                    buf -> EntityDetailsMenu.writeMenuOpenData(buf, livingTarget));
                         }
                     }
 
@@ -217,21 +210,21 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
                         TeamManager.setGlowEnabled(livingTarget, newState);
                         syncGlowState(livingTarget);
 
-                        player.displayClientMessage(Component.translatable(
+                        player.sendOverlayMessage(Component.translatable(
                                 newState ? "better_mine_team.msg.glow_enabled"
-                                        : "better_mine_team.msg.glow_disabled"), true);
+                                        : "better_mine_team.msg.glow_disabled"));
                     }
                     case ACTION_SET_TEAM_GLOW -> {
                         if (!isCaptain) { sendPermissionError(player); return; }
 
                         boolean newState = Boolean.parseBoolean(payload.extraData);
-                        int changedCount = TeamManager.setTeamGlowEnabled(player.getServer(), playerTeam, newState);
-                        syncTeamGlowState(player.getServer(), playerTeam);
+                        int changedCount = TeamManager.setTeamGlowEnabled(player.level().getServer(), playerTeam, newState);
+                        syncTeamGlowState(player.level().getServer(), playerTeam);
 
-                        player.displayClientMessage(Component.translatable(
+                        player.sendOverlayMessage(Component.translatable(
                                 newState ? "better_mine_team.msg.team_glow_enabled"
                                         : "better_mine_team.msg.team_glow_disabled",
-                                changedCount), true);
+                                changedCount));
                     }
 
                     // ── Aggressive level ───────────────────────────────────────────────
@@ -286,7 +279,7 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
                 case ACTION_GET_AGGRESSIVE_LEVEL -> {
                     // 服务端回传当前等级，通知 EntityDetailsScreen 更新按钮高亮
                     int level2 = Mth.clamp(Integer.parseInt(payload.extraData), 0, 2);
-                    if (Minecraft.getInstance().screen instanceof com.i113w.better_mine_team.client.gui.screen.EntityDetailsScreen screen) {
+                    if (net.minecraft.client.Minecraft.getInstance().screen instanceof com.i113w.better_mine_team.client.gui.screen.EntityDetailsScreen screen) {
                         screen.setAggressiveLevel(level2);
                     }
                 }
@@ -308,9 +301,9 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
         }
 
         private static void refreshOpenGlowControls() {
-            if (Minecraft.getInstance().screen instanceof com.i113w.better_mine_team.client.gui.screen.TeamManagementScreen screen) {
+            if (net.minecraft.client.Minecraft.getInstance().screen instanceof com.i113w.better_mine_team.client.gui.screen.TeamManagementScreen screen) {
                 screen.refreshGlowControls();
-            } else if (Minecraft.getInstance().screen instanceof com.i113w.better_mine_team.client.gui.screen.EntityDetailsScreen screen) {
+            } else if (net.minecraft.client.Minecraft.getInstance().screen instanceof com.i113w.better_mine_team.client.gui.screen.EntityDetailsScreen screen) {
                 screen.refreshGlowControls();
             }
         }
@@ -319,9 +312,9 @@ public record TeamManagementPayload(int actionType, int targetEntityId, String e
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private static void sendPermissionError(ServerPlayer player) {
-        player.displayClientMessage(
+        player.sendOverlayMessage(
                 Component.translatable("better_mine_team.msg.permission_denied")
-                        .withStyle(ChatFormatting.RED), true);
+                        .withStyle(ChatFormatting.RED));
     }
 
     private static void syncGlowState(LivingEntity entity) {

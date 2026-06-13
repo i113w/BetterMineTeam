@@ -4,13 +4,16 @@ import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.entity.goal.GoalSanitizer;
 import com.i113w.better_mine_team.common.registry.ModTags;
 import com.mojang.serialization.JsonOps;
+import net.minecraft.core.HolderSet;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.ItemLike;
 import net.neoforged.neoforge.common.ModConfigSpec;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
@@ -19,6 +22,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 public class BMTConfig {
     public static final ModConfigSpec CONFIG;
@@ -37,7 +42,6 @@ public class BMTConfig {
     private static final ModConfigSpec.BooleanValue enableMobTaming;
     private static final ModConfigSpec.BooleanValue showInventoryTeamButtons;
     private static final ModConfigSpec.BooleanValue enableRTSMode;
-    private static final ModConfigSpec.BooleanValue enableTeammateCarry;
     private static final ModConfigSpec.BooleanValue enableSummonAutoJoin;
     private static final ModConfigSpec.ConfigValue<List<? extends String>> summonAutoJoinBlacklist;
     private static final Set<EntityType<?>> summonBlacklistCache = new HashSet<>();
@@ -96,6 +100,7 @@ public class BMTConfig {
     private static final ModConfigSpec.ConfigValue<List<? extends String>> whitelistedEntities;
 
     private static final com.google.common.collect.BiMap<EntityType<?>, Ingredient> tamingMaterialMap = com.google.common.collect.HashBiMap.create();
+    private static final Ingredient EMPTY_INGREDIENT = new Ingredient((net.neoforged.neoforge.common.crafting.ICustomIngredient) null);
     private static Ingredient cachedDefaultIngredient = Ingredient.of(Items.GOLDEN_APPLE);
     private static Ingredient cachedDragonIngredient = Ingredient.of(Items.GOLDEN_APPLE);
     private static final Set<EntityType<?>> blacklistedCache = new HashSet<>();
@@ -108,6 +113,10 @@ public class BMTConfig {
 
     private static final ModConfigSpec.IntValue followPathFailThreshold;
     private static final ModConfigSpec.DoubleValue rtsMovementSpeed;
+
+    private static void traceInit(String stage) {
+        System.out.println("[BMTConfig] " + stage);
+    }
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -137,11 +146,8 @@ public class BMTConfig {
                 .comment("Enable RTS Mode and its UI buttons in the Team Management screen.")
                 .define("enableRTSMode", true);
 
-        enableTeammateCarry = builder
-                .comment("Allow players to pick up (Carry On) team members, even if they are hostile mobs or blacklisted.")
-                .comment("Requires 'Carry On' mod to be installed.")
-                .define("enableTeammateCarry", true);
         builder.pop();
+        traceInit("general");
 
         // GUI 黑名单控制区域
         builder.push("gui");
@@ -157,6 +163,7 @@ public class BMTConfig {
                 .comment("Example:[\"minecraft:zombie\", \"minecraft:skeleton\"]")
                 .defineListAllowEmpty("entityDetailsScreenBlacklist", List.of(), o -> o instanceof String);
         builder.pop();
+        traceInit("gui");
 
         builder.push("team_logic");
         autoAssignCaptain = builder
@@ -202,6 +209,7 @@ public class BMTConfig {
                 .comment("If true, blocks attacks from team members that are initiated by vanilla AI instead of TeamGoals.")
                 .define("blockUnauthorizedAttacks", true);
         builder.pop();
+        traceInit("team_logic");
 
         builder.push("ai");
         defaultFollowEnabled = builder
@@ -317,6 +325,7 @@ public class BMTConfig {
                         List.of("minecraft:pig"),
                         o -> o instanceof String);
         builder.pop();
+        traceInit("ai");
 
         builder.push("dragon");
         enableDragonTaming = builder.comment("Enable taming the Ender Dragon.").define("enableDragonTaming", true);
@@ -331,6 +340,7 @@ public class BMTConfig {
                 .comment("Set lower to prevent player clipping visually during steep dives.")
                 .defineInRange("dragonMaxPitch", 35.0, 10.0, 90.0);
         builder.pop();
+        traceInit("dragon");
 
         builder.push("taming");
         enableMobTaming = builder
@@ -379,8 +389,10 @@ public class BMTConfig {
                 });
 
         builder.pop();
+        traceInit("taming");
 
         CONFIG = builder.build();
+        traceInit("build");
     }
 
     public static void loadTamingMaterials() {
@@ -396,12 +408,12 @@ public class BMTConfig {
             try {
                 String[] split = entry.split("-", 2);
                 if (split.length != 2) continue;
-                ResourceLocation entityId = ResourceLocation.tryParse(split[0]);
+                Identifier entityId = Identifier.tryParse(split[0]);
                 if (entityId != null) {
                     BuiltInRegistries.ENTITY_TYPE.getOptional(entityId).ifPresent(entityType -> {
                         try {
                             JsonElement jsonElement = JsonParser.parseString(split[1]);
-                            Ingredient.CODEC_NONEMPTY.parse(JsonOps.INSTANCE, jsonElement)
+                            Ingredient.CODEC.parse(JsonOps.INSTANCE, jsonElement)
                                     .result().ifPresent(ingredient -> tamingMaterialMap.put(entityType, ingredient));
                         } catch (Exception ignored) {}
                     });
@@ -411,20 +423,20 @@ public class BMTConfig {
 
         summonBlacklistCache.clear();
         for (String id : summonAutoJoinBlacklist.get()) {
-            ResourceLocation rl = ResourceLocation.tryParse(id);
+            Identifier rl = Identifier.tryParse(id);
             if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(summonBlacklistCache::add);
         }
 
         // 解析并缓存 GUI 黑名单
         teamMemberListBlacklistCache.clear();
         for (String id : teamMemberListBlacklist.get()) {
-            ResourceLocation rl = ResourceLocation.tryParse(id);
+            Identifier rl = Identifier.tryParse(id);
             if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(teamMemberListBlacklistCache::add);
         }
 
         entityDetailsScreenBlacklistCache.clear();
         for (String id : entityDetailsScreenBlacklist.get()) {
-            ResourceLocation rl = ResourceLocation.tryParse(id);
+            Identifier rl = Identifier.tryParse(id);
             if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(entityDetailsScreenBlacklistCache::add);
         }
         GoalSanitizer.loadProtectedClasses();
@@ -453,7 +465,7 @@ public class BMTConfig {
             if (rule.isEmpty()) continue;
 
             if (rule.startsWith("#")) {
-                ResourceLocation tagId = ResourceLocation.tryParse(rule.substring(1));
+                Identifier tagId = Identifier.tryParse(rule.substring(1));
                 if (tagId != null) tags.add(TagKey.create(Registries.ENTITY_TYPE, tagId));
                 continue;
             }
@@ -464,7 +476,7 @@ public class BMTConfig {
                 continue;
             }
 
-            ResourceLocation rl = ResourceLocation.tryParse(rule);
+            Identifier rl = Identifier.tryParse(rule);
             if (rl != null) BuiltInRegistries.ENTITY_TYPE.getOptional(rl).ifPresent(entities::add);
         }
     }
@@ -472,13 +484,17 @@ public class BMTConfig {
     private static void loadDefaultMaterial() { cachedDefaultIngredient = parseIngredientString(defaultTamingMaterial.get(), Items.GOLDEN_APPLE); }
     private static void loadDragonMaterial() { cachedDragonIngredient = parseIngredientString(dragonTamingMaterial.get(), Items.GOLDEN_APPLE); }
 
-    private static Ingredient parseIngredientString(String str, net.minecraft.world.item.Item fallback) {
+    private static Ingredient parseIngredientString(String str, Item fallback) {
         try {
             if (str.startsWith("#")) {
-                var result = Ingredient.CODEC_NONEMPTY.parse(JsonOps.INSTANCE, new com.google.gson.JsonPrimitive("{\"tag\": \"" + str.substring(1) + "\"}"));
-                return result.result().orElse(Ingredient.of(fallback));
+                Identifier tagId = Identifier.tryParse(str.substring(1));
+                if (tagId != null) {
+                    TagKey<Item> tag = TagKey.create(Registries.ITEM, tagId);
+                    var holders = StreamSupport.stream(BuiltInRegistries.ITEM.getTagOrEmpty(tag).spliterator(), false).toList();
+                    return Ingredient.of(HolderSet.direct(holders));
+                }
             } else {
-                ResourceLocation rl = ResourceLocation.tryParse(str);
+                Identifier rl = Identifier.tryParse(str);
                 if (rl != null) {
                     var item = BuiltInRegistries.ITEM.getOptional(rl);
                     if (item.isPresent()) return Ingredient.of(item.get());
@@ -497,7 +513,6 @@ public class BMTConfig {
     public static boolean isPersonalTeamsEnabled() { return enablePersonalTeams.get(); }
     public static boolean isAutoJoinPersonalTeamOnLogin() { return autoJoinPersonalTeamOnLogin.get(); }
     public static int getPersonalTeamCleanupDelay() { return personalTeamCleanupDelay.get(); }
-    public static boolean isTeammateCarryEnabled() { return enableTeammateCarry.get(); }
     public static boolean isSummonAutoJoinEnabled() { return enableSummonAutoJoin.get(); }
     public static boolean isSummonBlacklisted(EntityType<?> type) { return summonBlacklistCache.contains(type); }
 
@@ -529,7 +544,7 @@ public class BMTConfig {
     public static double getRemoteInventoryRangeSqr() { return remoteInventoryRange.get() * remoteInventoryRange.get(); }
     public static com.google.common.collect.BiMap<EntityType<?>, Ingredient> getTamingMaterialMap() { return tamingMaterialMap; }
     public static Ingredient getTamingMaterial(EntityType<?> entityType) {
-        if (!canTame(entityType)) return Ingredient.EMPTY;
+        if (!canTame(entityType)) return EMPTY_INGREDIENT;
         if (entityType == EntityType.ENDER_DRAGON) return cachedDragonIngredient;
         return tamingMaterialMap.getOrDefault(entityType, cachedDefaultIngredient);
     }
@@ -539,11 +554,11 @@ public class BMTConfig {
         return true;
     }
     public static boolean isTamingBlacklisted(EntityType<?> entityType) {
-        return entityType.is(ModTags.Entities.UNTAMEABLE)
+        return entityType.builtInRegistryHolder().is(ModTags.Entities.UNTAMEABLE)
                 || matchesTamingRules(entityType, blacklistedCache, blacklistedNamespaces, blacklistedTags);
     }
     public static boolean isTamingWhitelisted(EntityType<?> entityType) {
-        return entityType.is(ModTags.Entities.TAMEABLE)
+        return entityType.builtInRegistryHolder().is(ModTags.Entities.TAMEABLE)
                 || matchesTamingRules(entityType, whitelistedCache, whitelistedNamespaces, whitelistedTags);
     }
     private static boolean matchesTamingRules(EntityType<?> entityType,
@@ -552,11 +567,11 @@ public class BMTConfig {
                                               Set<TagKey<EntityType<?>>> tags) {
         if (entities.contains(entityType)) return true;
 
-        ResourceLocation entityId = entityType.builtInRegistryHolder().key().location();
+        Identifier entityId = entityType.builtInRegistryHolder().key().identifier();
         if (namespaces.contains(entityId.getNamespace())) return true;
 
         for (TagKey<EntityType<?>> tag : tags) {
-            if (entityType.is(tag)) return true;
+            if (entityType.builtInRegistryHolder().is(tag)) return true;
         }
         return false;
     }

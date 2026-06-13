@@ -1,9 +1,10 @@
 package com.i113w.better_mine_team.client.gui.asset;
 
 import com.i113w.better_mine_team.BetterMineTeam;
-import com.mojang.blaze3d.systems.RenderSystem;
-import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.ARGB;
 
 public enum MTGuiIcons {
     // --- 0. 按钮底座 (20x20) ---
@@ -23,12 +24,20 @@ public enum MTGuiIcons {
     ICON_LEVEL_0(119, 21, 16, 16), // 被动 (Passive)
     ICON_LEVEL_1(136, 21, 16, 16), // 警戒 (Guard)
     ICON_LEVEL_2(153, 21, 16, 16), // 侵略 (Aggressive)
+    ICON_PERSONAL_TEAM_OFF(170, 21, 16, 16),
+    ICON_PERSONAL_TEAM_ON(187, 21, 16, 16),
 
     // --- 2. 滚动条组件 ---
     SCROLL_TRACK(0, 40, 12, 152),
     SCROLL_THUMB(13, 40, 12, 15);
 
-    private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "textures/gui/icons.png");
+    private static final Identifier TEXTURE = Identifier.fromNamespaceAndPath(
+            BetterMineTeam.MODID,
+            "textures/gui/icons.png"
+    );
+
+    private static final int TEXTURE_SIZE = 256;
+    private static final int WHITE_ARGB = 0xFFFFFFFF;
 
     public final int u;
     public final int v;
@@ -43,26 +52,75 @@ public enum MTGuiIcons {
     }
 
     // 1. 标准渲染
-    public void render(GuiGraphics gfx, int x, int y) {
-        gfx.blit(TEXTURE, x, y, u, v, width, height);
+    public void render(GuiGraphicsExtractor gfx, int x, int y) {
+        gfx.blit(
+                RenderPipelines.GUI_TEXTURED,
+                TEXTURE,
+                x,
+                y,
+                u,
+                v,
+                width,
+                height,
+                TEXTURE_SIZE,
+                TEXTURE_SIZE,
+                WHITE_ARGB
+        );
     }
 
     // 2. 自定义高度渲染 (用于滚动条 TeamMemberList)
-    public void render(GuiGraphics gfx, int x, int y, int customHeight) {
-        // 保持宽度不变(this.width)，高度使用 customHeight
-        // 采样时依然采样完整的原始高度(this.height)，让 OpenGL 处理拉伸
-        gfx.blit(TEXTURE, x, y, width, customHeight, u, v, width, height, 256, 256);
+    public void render(GuiGraphicsExtractor gfx, int x, int y, int customHeight) {
+        gfx.blit(
+                RenderPipelines.GUI_TEXTURED,
+                TEXTURE,
+                x,
+                y,
+                width,
+                customHeight,
+                u,
+                v,
+                width,
+                height,
+                TEXTURE_SIZE,
+                TEXTURE_SIZE,
+                WHITE_ARGB
+        );
     }
 
     // 3. 自定义宽高渲染 (用于缩放图标)
-    public void render(GuiGraphics gfx, int x, int y, int targetWidth, int targetHeight) {
-        gfx.blit(TEXTURE, x, y, targetWidth, targetHeight, u, v, width, height, 256, 256);
+    public void render(GuiGraphicsExtractor gfx, int x, int y, int targetWidth, int targetHeight) {
+        gfx.blit(
+                RenderPipelines.GUI_TEXTURED,
+                TEXTURE,
+                x,
+                y,
+                targetWidth,
+                targetHeight,
+                u,
+                v,
+                width,
+                height,
+                TEXTURE_SIZE,
+                TEXTURE_SIZE,
+                WHITE_ARGB
+        );
     }
 
     // 4. 带颜色的渲染
-    public void render(GuiGraphics gfx, int x, int y, float r, float g, float b, float a) {
-        RenderSystem.setShaderColor(r, g, b, a);
-        gfx.blit(TEXTURE, x, y, u, v, width, height);
-        RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+    public void render(GuiGraphicsExtractor gfx, int x, int y, float r, float g, float b, float a) {
+        int color = ARGB.colorFromFloat(a, r, g, b);
+        gfx.blit(
+                RenderPipelines.GUI_TEXTURED,
+                TEXTURE,
+                x,
+                y,
+                u,
+                v,
+                width,
+                height,
+                TEXTURE_SIZE,
+                TEXTURE_SIZE,
+                color
+        );
     }
 }

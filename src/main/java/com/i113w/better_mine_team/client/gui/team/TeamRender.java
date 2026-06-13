@@ -3,26 +3,35 @@ package com.i113w.better_mine_team.client.gui.team;
 import com.google.common.collect.Maps;
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.client.gui.ClientTeamUiState;
+import com.i113w.better_mine_team.client.gui.asset.MTGuiIcons;
 import com.i113w.better_mine_team.common.network.TeamActionPayload;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.ImageButton;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.WidgetSprites;
 import net.minecraft.client.gui.components.events.GuiEventListener;
-import net.minecraft.client.gui.narration.NarratableEntry;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.input.InputWithModifiers;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
 import net.neoforged.neoforge.client.event.ScreenEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import org.jetbrains.annotations.NotNull;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Objects;
+import java.util.WeakHashMap;
+import java.util.List;
 import java.util.function.Consumer;
 
 public class TeamRender {
@@ -42,7 +51,7 @@ public class TeamRender {
     private ImageButton teamIcon;
     private ImageButton teamPVPOn;
     private ImageButton teamPVPOff;
-    private ImageButton personalTeamToggle;
+    private PersonalTeamIconButton personalTeamToggle;
     private final Map<String, ImageButton> teamSmallIcons = Maps.newHashMap();
 
     private String lastTeamName = "";
@@ -100,7 +109,7 @@ public class TeamRender {
         if (localPlayer == null) return;
 
         String teamColor = DyeColor.WHITE.getName();
-        Scoreboard scoreboard = localPlayer.getScoreboard();
+        Scoreboard scoreboard = localPlayer.level().getScoreboard();
         PlayerTeam team = scoreboard.getPlayersTeam(localPlayer.getScoreboardName());
 
         if (team != null) {
@@ -142,12 +151,15 @@ public class TeamRender {
         initSmallIcon(guiLeft, guiTop);
 
         // 4. 初始化个人队伍按钮
-        this.personalTeamToggle = new ImageButton(
-                guiLeft - MAIN_ICON_SIZE,
-                guiTop + 8 * (SMALL_ICON_SIZE + SMALL_ICON_SPACING) + MAIN_ICON_OFFSET,
-                MAIN_ICON_SIZE, MAIN_ICON_SIZE,
-                createWidgetSprites("team/pvp/white_pvp_off"),
-                button -> sendPersonalTeamPacket(!this.lastPersonalTeamEnabled));
+        // 旧版是 16x16 ImageButton；新版使用 20x20 atlas 按钮底座 + 16x16 图标。
+        // X 贴住背包 GUI 左侧，Y 以旧 16x16 按钮中心为基准上移 2px，避免视觉位置跳动太大。
+        this.personalTeamToggle = new PersonalTeamIconButton(
+                guiLeft - 20,
+                guiTop + 8 * (SMALL_ICON_SIZE + SMALL_ICON_SPACING) + MAIN_ICON_OFFSET - 2,
+                MTGuiIcons.ICON_PERSONAL_TEAM_OFF,
+                button -> sendPersonalTeamPacket(!this.lastPersonalTeamEnabled),
+                Component.translatable("better_mine_team.gui.tooltip.personal_team")
+        );
 
         // 5. 注册到 Screen (这样 Screen 就会自动处理点击和渲染)
         addRenderableWidget();
@@ -169,8 +181,8 @@ public class TeamRender {
     }
 
     // 辅助方法：处理泛型转换，因为 ImageButton 既是 GuiEventListener 又是 Renderable
-    private void addWidget(ImageButton btn) {
-        this.widgetAdder.accept(btn);
+    private void addWidget(GuiEventListener widget) {
+        this.widgetAdder.accept(widget);
     }
 
     private void initSmallIcon(int guiLeft, int guiTop) {
@@ -179,7 +191,7 @@ public class TeamRender {
                 .map(DyeColor::getName)
                 .toList().reversed();
 
-        int firstOff = BetterMineTeam.IS_CONFLUENCE_LOADED ? CONFLUENCE_OFFSET : 0;
+        int firstOff = BetterMineTeam.isConfluenceLoaded() ? CONFLUENCE_OFFSET : 0;
 
         for (int i = 0; i < teamColors.size(); i++) {
             String newTeamColor = teamColors.get(i);
@@ -205,7 +217,7 @@ public class TeamRender {
         LocalPlayer player = Minecraft.getInstance().player;
         if (player == null) return;
 
-        Scoreboard scoreboard = player.getScoreboard();
+        Scoreboard scoreboard = player.level().getScoreboard();
         PlayerTeam team = scoreboard.getPlayersTeam(player.getScoreboardName());
 
         String currentTeamName = (team != null) ? team.getName() : "null";
@@ -252,15 +264,15 @@ public class TeamRender {
     }
 
     private void sendChangeTeamPacket(String colorName) {
-        PacketDistributor.sendToServer(new TeamActionPayload(TeamActionPayload.ACTION_CHANGE_TEAM, colorName, false));
+        ClientPacketDistributor.sendToServer(new TeamActionPayload(TeamActionPayload.ACTION_CHANGE_TEAM, colorName, false));
     }
 
     private void sendPvPPacket(boolean enablePvP) {
-        PacketDistributor.sendToServer(new TeamActionPayload(TeamActionPayload.ACTION_SET_PVP, "", enablePvP));
+        ClientPacketDistributor.sendToServer(new TeamActionPayload(TeamActionPayload.ACTION_SET_PVP, "", enablePvP));
     }
 
     private void sendPersonalTeamPacket(boolean enabled) {
-        PacketDistributor.sendToServer(new TeamActionPayload(TeamActionPayload.ACTION_SET_PERSONAL_TEAM, "", enabled));
+        ClientPacketDistributor.sendToServer(new TeamActionPayload(TeamActionPayload.ACTION_SET_PERSONAL_TEAM, "", enabled));
     }
 
     private void visibleTeamSmallIcon(boolean visible) {
@@ -270,22 +282,24 @@ public class TeamRender {
     }
 
     private void setImageButtonSprites(ImageButton button, String path) {
-        ResourceLocation loc = BetterMineTeam.asResource(path);
+        Identifier loc = BetterMineTeam.asResource(path);
         button.sprites = new WidgetSprites(loc, loc);
     }
 
     private WidgetSprites createWidgetSprites(String path) {
-        ResourceLocation loc = BetterMineTeam.asResource(path);
+        Identifier loc = BetterMineTeam.asResource(path);
         return new WidgetSprites(loc, loc);
     }
 
     private void updatePersonalTeamButton() {
         if (this.personalTeamToggle == null) return;
+
         this.personalTeamToggle.visible = this.lastPersonalTeamsAvailable;
         this.personalTeamToggle.active = this.lastPersonalTeamsAvailable;
-        setImageButtonSprites(
-                this.personalTeamToggle,
-                this.lastPersonalTeamEnabled ? "team/pvp/white_pvp_on" : "team/pvp/white_pvp_off"
+        this.personalTeamToggle.setIcon(
+                this.lastPersonalTeamEnabled
+                        ? MTGuiIcons.ICON_PERSONAL_TEAM_ON
+                        : MTGuiIcons.ICON_PERSONAL_TEAM_OFF
         );
     }
 
@@ -304,5 +318,53 @@ public class TeamRender {
             if (TeamManager.getOriginalColorByName(name, null) != null) return name;
         }
         return "white";
+    }
+    private static class PersonalTeamIconButton extends Button {
+
+        private MTGuiIcons icon;
+        private long lastPressTime = 0L;
+
+        private PersonalTeamIconButton(
+                int x,
+                int y,
+                MTGuiIcons icon,
+                OnPress onPress,
+                Component tooltip
+        ) {
+            super(x, y, 20, 20, Component.empty(), onPress, DEFAULT_NARRATION);
+            this.icon = icon;
+            this.setTooltip(Tooltip.create(tooltip));
+        }
+
+        public void setIcon(MTGuiIcons icon) {
+            this.icon = icon;
+        }
+
+        @Override
+        public void onPress(InputWithModifiers input) {
+            super.onPress(input);
+            this.lastPressTime = System.currentTimeMillis();
+        }
+
+        @Override
+        protected void extractContents(@NotNull GuiGraphicsExtractor gfx, int mouseX, int mouseY, float partialTick) {
+            boolean hovered = mouseX >= getX() && mouseX < getX() + width
+                    && mouseY >= getY() && mouseY < getY() + height;
+            boolean pressed = System.currentTimeMillis() - this.lastPressTime < 120L;
+
+            MTGuiIcons base = !this.active
+                    ? MTGuiIcons.BUTTON_DISABLED
+                    : pressed
+                    ? MTGuiIcons.BUTTON_PRESSED
+                    : hovered
+                    ? MTGuiIcons.BUTTON_HOVER
+                    : MTGuiIcons.BUTTON_NORMAL;
+
+            base.render(gfx, getX(), getY());
+
+            if (this.icon != null) {
+                this.icon.render(gfx, getX() + 2, getY() + 2);
+            }
+        }
     }
 }

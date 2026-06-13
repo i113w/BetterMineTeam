@@ -14,9 +14,16 @@ public class ModMenuTypes {
 
     // 注册实体详情菜单
     public static final DeferredHolder<MenuType<?>, MenuType<EntityDetailsMenu>> ENTITY_DETAILS_MENU =
-            MENUS.register("entity_details", () -> IMenuTypeExtension.create(EntityDetailsMenu::new));
+            MENUS.register("entity_details", ModMenuTypes::createEntityDetailsMenu);
 
     public static void register(IEventBus eventBus) {
         MENUS.register(eventBus);
+    }
+
+    private static MenuType<EntityDetailsMenu> createEntityDetailsMenu() {
+        BetterMineTeam.LOGGER.info("[BMT] build menu entity_details start");
+        MenuType<EntityDetailsMenu> type = IMenuTypeExtension.create(EntityDetailsMenu::new);
+        BetterMineTeam.LOGGER.info("[BMT] build menu entity_details done");
+        return type;
     }
 }

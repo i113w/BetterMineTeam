@@ -6,15 +6,17 @@ import com.i113w.better_mine_team.client.gui.asset.MTGuiIcons;
 import com.i113w.better_mine_team.common.menu.EntityDetailsMenu;
 import com.i113w.better_mine_team.common.network.TeamManagementPayload;
 import com.i113w.better_mine_team.common.team.TeamManager;
-import com.mojang.blaze3d.systems.RenderSystem;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.input.InputWithModifiers;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -23,16 +25,14 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.joml.Quaternionf;
-import org.joml.Vector3f;
 import org.lwjgl.glfw.GLFW;
 
 public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMenu> {
 
-    private static final ResourceLocation BG_TEXTURE = ResourceLocation.fromNamespaceAndPath(
+    private static final Identifier BG_TEXTURE = Identifier.fromNamespaceAndPath(
             BetterMineTeam.MODID, "textures/gui/entity_details.png"
     );
 
@@ -64,9 +64,7 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
     // ─────────────────────────────────────────────────────────────────────────
 
     public EntityDetailsScreen(EntityDetailsMenu menu, Inventory playerInventory, Component title) {
-        super(menu, playerInventory, title);
-        this.imageWidth = CONTENT_WIDTH;
-        this.imageHeight = CONTENT_HEIGHT;
+        super(menu, playerInventory, title, CONTENT_WIDTH, CONTENT_HEIGHT);
         this.inventoryLabelX = 85;
         this.inventoryLabelY = 104 - 10;
         this.titleLabelX = 85;
@@ -173,7 +171,7 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
 
     private void updateFollowButtonState() {
         if (this.menu.getTargetEntity() == null || this.followButton == null) return;
-        boolean isFollowing = this.menu.getTargetEntity().getPersistentData().getBoolean("bmt_follow_enabled");
+        boolean isFollowing = this.menu.getTargetEntity().getPersistentData().getBooleanOr("bmt_follow_enabled", false);
         this.followButton.setIcon(isFollowing ? MTGuiIcons.ICON_FOLLOW_ON : MTGuiIcons.ICON_FOLLOW_OFF);
     }
 
@@ -251,7 +249,7 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
     }
 
     private void sendAction(int action, String data) {
-        PacketDistributor.sendToServer(new TeamManagementPayload(
+        ClientPacketDistributor.sendToServer(new TeamManagementPayload(
                 action,
                 this.menu.getTargetEntity().getId(),
                 data
@@ -261,7 +259,7 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
     private void requestCaptainStatus() {
         if (this.minecraft == null || this.minecraft.player == null) return;
         ClientTeamUiState.setLocalPlayerCaptain(this.minecraft.player, false);
-        PacketDistributor.sendToServer(new TeamManagementPayload(
+        ClientPacketDistributor.sendToServer(new TeamManagementPayload(
                 TeamManagementPayload.ACTION_REQUEST_CAPTAIN_STATUS,
                 this.minecraft.player.getId(),
                 ""));
@@ -274,22 +272,22 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
     // ── Input ─────────────────────────────────────────────────────────────────
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    public boolean keyPressed(KeyEvent event) {
         if (this.isRenaming) {
-            if (keyCode == GLFW.GLFW_KEY_ENTER) {
+            if (event.key() == GLFW.GLFW_KEY_ENTER) {
                 confirmRename();
                 return true;
             }
-            if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+            if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
                 this.isRenaming = false;
                 this.nameField.setVisible(false);
                 return true;
             }
             if (this.nameField.isFocused()) {
-                return this.nameField.keyPressed(keyCode, scanCode, modifiers);
+                return this.nameField.keyPressed(event);
             }
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     private void addItemButton(int x, int y, Item item, Button.OnPress onPress, String tooltipKey) {
@@ -299,18 +297,29 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
     // ── Render ────────────────────────────────────────────────────────────────
 
     @Override
-    public void render(@NotNull GuiGraphics gfx, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(@NotNull GuiGraphicsExtractor gfx, int mouseX, int mouseY, float partialTick) {
+        this.xMouse = mouseX;
+        this.yMouse = mouseY;
+        super.extractRenderState(gfx, mouseX, mouseY, partialTick);
+        renderDisabledSlotLocks(gfx);
+    }
+
+    private void renderDisabledSlotLocks(GuiGraphicsExtractor gfx) {
+        for (Slot slot : this.menu.slots) {
+            if (slot instanceof EntityDetailsMenu.DisabledSlot) {
+                int x = this.leftPos + slot.x;
+                int y = this.topPos + slot.y;
+                gfx.fill(x, y, x + 16, y + 16, 0x508B8B8B);
+                MTGuiIcons.ICON_LOCKED_INVENTORY.render(gfx, x, y);
+            }
+        }
+    }
+    @Override
+    public void extractBackground(@NotNull GuiGraphicsExtractor gfx, int mouseX, int mouseY, float partialTick) {
         this.xMouse = mouseX;
         this.yMouse = mouseY;
         gfx.fill(0, 0, this.width, this.height, 0x50000000);
-        super.render(gfx, mouseX, mouseY, partialTick);
-        this.renderTooltip(gfx, mouseX, mouseY);
-    }
-
-    @Override
-    protected void renderBg(@NotNull GuiGraphics gfx, float partialTick, int mouseX, int mouseY) {
-        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-        gfx.blit(BG_TEXTURE, this.leftPos, this.topPos, 0, 0,
+        gfx.blit(RenderPipelines.GUI_TEXTURED, BG_TEXTURE, this.leftPos, this.topPos, 0, 0,
                 this.imageWidth, this.imageHeight, TEXTURE_SIZE, TEXTURE_SIZE);
 
         LivingEntity entity = this.menu.getTargetEntity();
@@ -320,62 +329,17 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
             int entityX = this.leftPos + 32;
             int entityY = this.topPos + 84;
 
-            gfx.pose().pushPose();
-            gfx.pose().translate(0, 0, 50);
-            RenderSystem.enableDepthTest();
-
-            renderEntityInInventoryFollowsMouse(gfx, entityX, entityY, scale,
-                    (float) entityX - this.xMouse,
-                    (float) (this.topPos + 40) - this.yMouse,
+            InventoryScreen.extractEntityInInventoryFollowsMouse(gfx,
+                    entityX - scale,
+                    entityY - scale * 2,
+                    entityX + scale,
+                    entityY,
+                    scale,
+                    0.0625F,
+                    this.xMouse,
+                    this.yMouse,
                     entity);
-
-            RenderSystem.disableDepthTest();
-            gfx.pose().popPose();
         }
-
-        for (Slot slot : this.menu.slots) {
-            if (slot instanceof EntityDetailsMenu.DisabledSlot) {
-                int x = this.leftPos + slot.x;
-                int y = this.topPos  + slot.y;
-                gfx.fill(x, y, x + 16, y + 16, 0x508B8B8B);
-                RenderSystem.enableBlend();
-                MTGuiIcons.ICON_LOCKED_INVENTORY.render(gfx, x, y);
-                RenderSystem.disableBlend();
-            }
-        }
-    }
-
-    @SuppressWarnings("all")
-    private void renderEntityInInventoryFollowsMouse(GuiGraphics gfx, int x, int y, int scale,
-                                                     float mouseX, float mouseY, LivingEntity entity) {
-        float f  = (float) Math.atan(mouseX / 40.0F);
-        float f1 = (float) Math.atan(mouseY / 40.0F);
-        Quaternionf quaternionf  = (new Quaternionf()).rotateZ((float) Math.PI);
-        Quaternionf quaternionf1 = (new Quaternionf()).rotateX(f1 * 20.0F * ((float) Math.PI / 180F));
-        quaternionf.mul(quaternionf1);
-
-        float yBodyRot = entity.yBodyRot;
-        float yHeadRot = entity.yHeadRot;
-        float xRot     = entity.getXRot();
-        float yRotO    = entity.yRotO;
-        float xRotO    = entity.xRotO;
-
-        entity.yBodyRot = 180.0F + f * 20.0F;
-        entity.setYRot(180.0F + f * 40.0F);
-        entity.setXRot(-f1 * 20.0F);
-        entity.yHeadRot = entity.getYRot();
-        entity.yRotO    = entity.getYRot();
-        entity.xRotO    = entity.getXRot();
-
-        InventoryScreen.renderEntityInInventory(gfx, (float) x, (float) y, (float) scale,
-                new Vector3f(0, 0, 0), quaternionf, quaternionf1, entity);
-
-        entity.yBodyRot = yBodyRot;
-        entity.setYRot(yHeadRot);
-        entity.setXRot(xRot);
-        entity.yHeadRot = yHeadRot;
-        entity.yRotO    = yRotO;
-        entity.xRotO    = xRotO;
     }
 
     // ── IconButton ────────────────────────────────────────────────────────────
@@ -439,34 +403,35 @@ public class EntityDetailsScreen extends AbstractContainerScreen<EntityDetailsMe
         }
 
         @Override
-        public void onPress() {
-            super.onPress();
+        public void onPress(InputWithModifiers input) {
+            super.onPress(input);
             this.lastPressTime = System.currentTimeMillis();
         }
 
         @Override
-        public void renderWidget(@NotNull GuiGraphics gfx, int mouseX, int mouseY, float partialTick) {
-            boolean isPressed = System.currentTimeMillis() - lastPressTime < 1000;
+        protected void extractContents(@NotNull GuiGraphicsExtractor gfx, int mouseX, int mouseY, float partialTick) {
+            boolean hovered = mouseX >= getX() && mouseX < getX() + width
+                    && mouseY >= getY() && mouseY < getY() + height;
+            boolean pressed = System.currentTimeMillis() - this.lastPressTime < 120L;
 
-            // Highlighted border (1px gold ring drawn behind the button base)
+            MTGuiIcons base = !this.active
+                    ? MTGuiIcons.BUTTON_DISABLED
+                    : pressed
+                    ? MTGuiIcons.BUTTON_PRESSED
+                    : hovered
+                    ? MTGuiIcons.BUTTON_HOVER
+                    : MTGuiIcons.BUTTON_NORMAL;
+            base.render(gfx, getX(), getY());
+
             if (highlighted) {
-                gfx.fill(getX() - 1, getY() - 1, getX() + width + 1, getY() + height + 1, 0xFFFFD700);
-            }
-
-            // Button base
-            if (isPressed) {
-                MTGuiIcons.BUTTON_PRESSED.render(gfx, getX(), getY());
-            } else if (isHoveredOrFocused()) {
-                MTGuiIcons.BUTTON_HOVER.render(gfx, getX(), getY());
-            } else {
-                MTGuiIcons.BUTTON_NORMAL.render(gfx, getX(), getY());
+                gfx.outline(getX() - 1, getY() - 1, width + 2, height + 2, 0xFFFFD700);
             }
 
             int renderX = getX() + 2 + iconOffsetX;
             int renderY = getY() + 2 + iconOffsetY;
 
             if (this.itemStack != null) {
-                gfx.renderItem(this.itemStack, renderX, renderY);
+                gfx.item(this.itemStack, renderX, renderY);
             } else if (this.icon != null) {
                 this.icon.render(gfx, renderX, renderY);
             }

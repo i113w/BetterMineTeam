@@ -7,7 +7,7 @@ import com.i113w.better_mine_team.common.registry.ModEntities;     // [新增]
 import com.i113w.better_mine_team.data.DataGenerators;
 import com.mojang.logging.LogUtils;
 import com.i113w.better_mine_team.common.config.BMTConfig;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -27,36 +27,48 @@ import net.neoforged.fml.loading.FMLEnvironment;
 public class BetterMineTeam {
     public static final String MODID = "better_mine_team";
     public static final Logger LOGGER = LogUtils.getLogger();
-    public static final boolean IS_CONFLUENCE_LOADED = ModList.get().isLoaded("confluence");
 
     public BetterMineTeam(IEventBus modEventBus, ModContainer modContainer) {
+        LOGGER.info("[BMT] init start");
         modEventBus.addListener(this::onFMLCommonSetup);
 
         modEventBus.addListener(DataGenerators::gatherData);
 
         // 注册配置文件
+        LOGGER.info("[BMT] register config");
         modContainer.registerConfig(ModConfig.Type.COMMON, BMTConfig.CONFIG, "better_mine_team.toml");
 
         // --- 核心注册 ---
+        LOGGER.info("[BMT] register network");
         modEventBus.addListener(MTNetworkRegister::registerPayload);
+        LOGGER.info("[BMT] register menus");
         ModMenuTypes.register(modEventBus);
 
+        LOGGER.info("[BMT] register attachments");
         ModAttachments.register(modEventBus);
+        LOGGER.info("[BMT] register entities");
         ModEntities.register(modEventBus);
 
         // 将屏幕注册移动到 if (CLIENT) 代码块内部
-        if (FMLEnvironment.dist == Dist.CLIENT) {
+        if (FMLEnvironment.getDist() == Dist.CLIENT) {
+            LOGGER.info("[BMT] register client");
             modEventBus.addListener(ClientSetup::onClientSetup);
             modEventBus.addListener(ClientSetup::registerScreens);
             // modEventBus.addListener(ClientSetup::registerEntityRenderers);
             modEventBus.addListener(ModKeyMappings::onRegisterKeyMappings);
+            modEventBus.addListener(MTNetworkRegister::registerClientPayloads);
         }
         modEventBus.addListener(this::onConfigLoad);
         modEventBus.addListener(this::onConfigReload);
+        LOGGER.info("[BMT] init done");
     }
 
-    public static ResourceLocation asResource(String path) {
-        return ResourceLocation.fromNamespaceAndPath(MODID, path);
+    public static Identifier asResource(String path) {
+        return Identifier.fromNamespaceAndPath(MODID, path);
+    }
+
+    public static boolean isConfluenceLoaded() {
+        return ModList.get().isLoaded("confluence");
     }
 
     @SubscribeEvent

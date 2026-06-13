@@ -26,7 +26,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -39,6 +39,9 @@ public class BmtRTSEvents {
 
     private static final int CAMERA_STYLE_BUTTON_WIDTH = 128;
     private static final int CAMERA_STYLE_BUTTON_HEIGHT = 20;
+
+    private static final int RTS_HUD_BUTTON_BG = 0x80000000;
+    private static final int RTS_HUD_TEXT = 0xFFFFFFFF;
 
     // ==========================================
     // 1. 库事件监听 (选区与指令)
@@ -64,7 +67,7 @@ public class BmtRTSEvents {
         BmtRTSManager.RTSMode mode = BmtRTSManager.getMode();
         if (mode == BmtRTSManager.RTSMode.RECRUIT) {
             int revision = ClientSelectionManager.getRevision();
-            PacketDistributor.sendToServer(new C2S_IssueCommandPayload(
+            ClientPacketDistributor.sendToServer(new C2S_IssueCommandPayload(
                     CommandType.RECRUIT,
                     CommandTarget.EMPTY,
                     Collections.emptyList(),
@@ -91,7 +94,7 @@ public class BmtRTSEvents {
             targetIds.remove(0);
             CommandTarget target = new CommandTarget(Vec3.ZERO, primaryId, BlockPos.ZERO);
             int revision = ClientSelectionManager.getRevision();
-            PacketDistributor.sendToServer(new C2S_IssueCommandPayload(CommandType.ATTACK, target, targetIds, revision));
+            ClientPacketDistributor.sendToServer(new C2S_IssueCommandPayload(CommandType.ATTACK, target, targetIds, revision));
 
         } else {
             HitResult hit = event.getSingleHitResult();
@@ -117,7 +120,7 @@ public class BmtRTSEvents {
             }
 
             int revision = ClientSelectionManager.getRevision();
-            PacketDistributor.sendToServer(new C2S_IssueCommandPayload(type, target, Collections.emptyList(), revision));
+            ClientPacketDistributor.sendToServer(new C2S_IssueCommandPayload(type, target, Collections.emptyList(), revision));
         }
     }
 
@@ -135,7 +138,7 @@ public class BmtRTSEvents {
         }
 
         int revision = ClientSelectionManager.getRevision();
-        PacketDistributor.sendToServer(new C2S_SelectionSyncPayload(validIds, revision));
+        ClientPacketDistributor.sendToServer(new C2S_SelectionSyncPayload(validIds, revision));
     }
 
     // 按键绘制
@@ -155,6 +158,7 @@ public class BmtRTSEvents {
     @SubscribeEvent
     public static void onRenderGui(RenderGuiEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
+
         // 只有在 RTS 摄像机激活时才渲染 UI
         if (!RTSCameraController.get().isActive() || mc.options.hideGui) return;
 
@@ -166,18 +170,32 @@ public class BmtRTSEvents {
         int btnH = 20;
         int btnX = width / 2 - btnW / 2;
         int btnY = 10;
-        event.getGuiGraphics().fill(btnX, btnY, btnX + btnW, btnY + btnH, 0x80000000);
-        event.getGuiGraphics().drawCenteredString(mc.font, "Exit RTS [ESC]", width / 2, btnY + 6, 0xFFFFFF);
+
+        event.getGuiGraphics().fill(btnX, btnY, btnX + btnW, btnY + btnH, RTS_HUD_BUTTON_BG);
+        event.getGuiGraphics().centeredText(
+                mc.font,
+                "Exit RTS [ESC]",
+                width / 2,
+                btnY + 6,
+                RTS_HUD_TEXT
+        );
 
         // 左下角相机模式切换按钮
         int camBtnW = CAMERA_STYLE_BUTTON_WIDTH;
         int camBtnH = CAMERA_STYLE_BUTTON_HEIGHT;
         int camBtnX = 10;
         int camBtnY = height - camBtnH - 10;
-        event.getGuiGraphics().fill(camBtnX, camBtnY, camBtnX + camBtnW, camBtnY + camBtnH, 0x80000000);
+
+        event.getGuiGraphics().fill(camBtnX, camBtnY, camBtnX + camBtnW, camBtnY + camBtnH, RTS_HUD_BUTTON_BG);
 
         String styleText = getCameraStyleText();
-        event.getGuiGraphics().drawCenteredString(mc.font, styleText, camBtnX + camBtnW / 2, camBtnY + 6, 0xFFFFFF);
+        event.getGuiGraphics().centeredText(
+                mc.font,
+                styleText,
+                camBtnX + camBtnW / 2,
+                camBtnY + 6,
+                RTS_HUD_TEXT
+        );
     }
 
     private static String getCameraStyleText() {

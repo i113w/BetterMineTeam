@@ -7,13 +7,13 @@ import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 // [修复] 这里的 ByteBuf 类型必须是 RegistryFriendlyByteBuf，因为 ComponentSerialization 需要它
 public record S2C_CommandAckPayload(boolean success, int count, Component message) implements CustomPacketPayload {
 
     public static final Type<S2C_CommandAckPayload> TYPE =
-            new Type<>(ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "rts_cmd_ack"));
+            new Type<>(Identifier.fromNamespaceAndPath(BetterMineTeam.MODID, "rts_cmd_ack"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, S2C_CommandAckPayload> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.BOOL, S2C_CommandAckPayload::success,
@@ -30,7 +30,7 @@ public record S2C_CommandAckPayload(boolean success, int count, Component messag
     public static void clientHandle(final S2C_CommandAckPayload payload, final net.neoforged.neoforge.network.handling.IPayloadContext context) {
         context.enqueueWork(() -> {
             if (net.minecraft.client.Minecraft.getInstance().player != null) {
-                net.minecraft.client.Minecraft.getInstance().player.displayClientMessage(payload.message(), true);
+                net.minecraft.client.Minecraft.getInstance().player.sendOverlayMessage(payload.message());
             }
         });
     }

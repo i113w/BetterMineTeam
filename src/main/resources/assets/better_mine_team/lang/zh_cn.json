@@ -61,5 +61,6 @@
 "better_mine_team.msg.personal_team_joined": "已加入你的个人队伍",
 "better_mine_team.msg.personal_team_joined_left_previous": "已加入你的个人队伍,并自动退出原队伍 %s",
 "better_mine_team.msg.personal_team_left": "已离开你的个人队伍",
-"better_mine_team.msg.personal_team_select_blocked": "个人队伍已开启,关闭后才能选择公共队伍"
+"better_mine_team.msg.personal_team_select_blocked": "个人队伍已开启,关闭后才能选择公共队伍",
+"better_mine_team.gui.tooltip.personal_team": "个人队伍"
 }

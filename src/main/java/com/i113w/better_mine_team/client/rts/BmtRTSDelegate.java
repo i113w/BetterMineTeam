@@ -4,16 +4,16 @@ import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import com.i113w.camera_lib.api.IRTSInteractionDelegate;
 import net.minecraft.client.Minecraft;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import org.jetbrains.annotations.Nullable;
 
 public class BmtRTSDelegate implements IRTSInteractionDelegate {
 
-    private static final ResourceLocation CURSOR_NORMAL = ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "textures/gui/cursors/cursor_normal.png");
-    private static final ResourceLocation CURSOR_ATTACK = ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "textures/gui/cursors/cursor_attack.png");
-    private static final ResourceLocation CURSOR_ALLY = ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "textures/gui/cursors/cursor_ally.png");
+    private static final Identifier CURSOR_NORMAL = Identifier.fromNamespaceAndPath(BetterMineTeam.MODID, "textures/gui/cursors/cursor_normal.png");
+    private static final Identifier CURSOR_ATTACK = Identifier.fromNamespaceAndPath(BetterMineTeam.MODID, "textures/gui/cursors/cursor_attack.png");
+    private static final Identifier CURSOR_ALLY = Identifier.fromNamespaceAndPath(BetterMineTeam.MODID, "textures/gui/cursors/cursor_ally.png");
 
     @Override
     public boolean isSelectable(Entity entity) {
@@ -25,7 +25,7 @@ public class BmtRTSDelegate implements IRTSInteractionDelegate {
     }
 
     @Override
-    public ResourceLocation getCursorIcon(@Nullable Entity hoveredEntity, boolean isAttackDragging) {
+    public Identifier getCursorIcon(@Nullable Entity hoveredEntity, boolean isAttackDragging) {
         Minecraft mc = Minecraft.getInstance();
         if (isAttackDragging) {
             return CURSOR_ATTACK;

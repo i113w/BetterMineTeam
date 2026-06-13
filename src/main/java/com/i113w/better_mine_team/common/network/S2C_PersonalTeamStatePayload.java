@@ -7,13 +7,13 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 public record S2C_PersonalTeamStatePayload(boolean available, boolean enabled) implements CustomPacketPayload {
 
     public static final Type<S2C_PersonalTeamStatePayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "personal_team_state"));
+            Identifier.fromNamespaceAndPath(BetterMineTeam.MODID, "personal_team_state"));
 
     public static final StreamCodec<ByteBuf, S2C_PersonalTeamStatePayload> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.BOOL, S2C_PersonalTeamStatePayload::available,

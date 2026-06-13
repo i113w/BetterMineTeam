@@ -4,7 +4,7 @@ import com.i113w.better_mine_team.BetterMineTeam;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.NotNull;
 
@@ -13,7 +13,7 @@ import org.jetbrains.annotations.NotNull;
 
 public record OpenTeamGuiPayload() implements CustomPacketPayload {
 
-    public static final Type<OpenTeamGuiPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "open_team_gui"));
+    public static final Type<OpenTeamGuiPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(BetterMineTeam.MODID, "open_team_gui"));
 
     public static final StreamCodec<ByteBuf, OpenTeamGuiPayload> STREAM_CODEC = StreamCodec.unit(new OpenTeamGuiPayload());
 

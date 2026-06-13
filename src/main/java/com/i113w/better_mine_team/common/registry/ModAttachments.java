@@ -16,15 +16,29 @@ public class ModAttachments {
 
     // 注册生物数据 (保留序列化，因为生物的指令状态需要持久化)
     public static final Supplier<AttachmentType<RTSUnitData>> UNIT_DATA = ATTACHMENTS.register(
-            "rts_unit_data", () -> AttachmentType.serializable(RTSUnitData::new).build()
+            "rts_unit_data", ModAttachments::createUnitAttachment
     );
 
     // 注册玩家数据（使用 builder 而不是 serializable，仅在内存中存活，解决重登错位 Bug）
     public static final Supplier<AttachmentType<RTSPlayerData>> PLAYER_DATA = ATTACHMENTS.register(
-            "rts_player_data", () -> AttachmentType.builder(RTSPlayerData::new).build()
+            "rts_player_data", ModAttachments::createPlayerAttachment
     );
 
     public static void register(IEventBus bus) {
         ATTACHMENTS.register(bus);
+    }
+
+    private static AttachmentType<RTSUnitData> createUnitAttachment() {
+        BetterMineTeam.LOGGER.info("[BMT] build attachment rts_unit_data start");
+        AttachmentType<RTSUnitData> type = AttachmentType.serializable(RTSUnitData::new).build();
+        BetterMineTeam.LOGGER.info("[BMT] build attachment rts_unit_data done");
+        return type;
+    }
+
+    private static AttachmentType<RTSPlayerData> createPlayerAttachment() {
+        BetterMineTeam.LOGGER.info("[BMT] build attachment rts_player_data start");
+        AttachmentType<RTSPlayerData> type = AttachmentType.builder(RTSPlayerData::new).build();
+        BetterMineTeam.LOGGER.info("[BMT] build attachment rts_player_data done");
+        return type;
     }
 }

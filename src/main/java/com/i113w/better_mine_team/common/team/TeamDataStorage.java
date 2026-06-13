@@ -2,13 +2,16 @@ package com.i113w.better_mine_team.common.team;
 
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.config.BMTConfig;
+import com.mojang.serialization.Codec;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.level.saveddata.SavedData;
+import net.minecraft.world.level.saveddata.SavedDataType;
 import net.minecraft.world.scores.PlayerTeam;
-import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -17,6 +20,14 @@ import java.util.Set;
 import java.util.UUID;
 
 public class TeamDataStorage extends SavedData {
+    private static final Codec<TeamDataStorage> CODEC = CompoundTag.CODEC.xmap(TeamDataStorage::load, TeamDataStorage::save);
+    private static final SavedDataType<TeamDataStorage> TYPE = new SavedDataType<>(
+            Identifier.withDefaultNamespace("better_mine_team_data"),
+            TeamDataStorage::new,
+            CODEC,
+            DataFixTypes.SAVED_DATA_COMMAND_STORAGE
+    );
+
     // 存储：队伍名 -> 队长UUID
     private final Map<String, UUID> teamCaptains = new HashMap<>();
     private final Map<String, Boolean> teamGlowDefaults = new HashMap<>();
@@ -27,10 +38,7 @@ public class TeamDataStorage extends SavedData {
 
     public static TeamDataStorage get(ServerLevel level) {
         ServerLevel overworld = level.getServer().overworld();
-        return overworld.getDataStorage().computeIfAbsent(
-                new Factory<>(TeamDataStorage::new, TeamDataStorage::load, null),
-                "better_mine_team_data"
-        );
+        return overworld.getDataStorage().computeIfAbsent(TYPE);
     }
 
     // --- 队长接口 ---
@@ -154,11 +162,10 @@ public class TeamDataStorage extends SavedData {
 
     // --- NBT 读写 ---
 
-    @Override
-    @NotNull
-    public CompoundTag save(@NotNull CompoundTag tag, @NotNull HolderLookup.Provider provider) {
+    private CompoundTag save() {
+        CompoundTag tag = new CompoundTag();
         CompoundTag captainsTag = new CompoundTag();
-        teamCaptains.forEach(captainsTag::putUUID);
+        teamCaptains.forEach((teamName, uuid) -> captainsTag.putString(teamName, uuid.toString()));
         tag.put("Captains", captainsTag);
 
         CompoundTag glowDefaultsTag = new CompoundTag();
@@ -174,7 +181,7 @@ public class TeamDataStorage extends SavedData {
         tag.put("PersonalTeamPreferences", personalPreferencesTag);
 
         CompoundTag personalOwnersTag = new CompoundTag();
-        personalTeamOwners.forEach(personalOwnersTag::putUUID);
+        personalTeamOwners.forEach((teamName, uuid) -> personalOwnersTag.putString(teamName, uuid.toString()));
         tag.put("PersonalTeamOwners", personalOwnersTag);
 
         CompoundTag personalEmptySinceTag = new CompoundTag();
@@ -183,52 +190,63 @@ public class TeamDataStorage extends SavedData {
         return tag;
     }
 
-    public static TeamDataStorage load(CompoundTag tag, HolderLookup.Provider provider) {
+    public static TeamDataStorage load(CompoundTag tag) {
         TeamDataStorage data = new TeamDataStorage();
         if (tag.contains("Captains")) {
-            CompoundTag captainsTag = tag.getCompound("Captains");
-            for (String key : captainsTag.getAllKeys()) {
-                UUID uuid = captainsTag.getUUID(key);
-                data.teamCaptains.put(key, uuid);
-                BetterMineTeam.debug("STORAGE: Loaded Captain: {} -> {}", key, uuid);
+            CompoundTag captainsTag = tag.getCompoundOrEmpty("Captains");
+            for (String key : captainsTag.keySet()) {
+                parseUuid(captainsTag, key).ifPresent(uuid -> {
+                    data.teamCaptains.put(key, uuid);
+                    BetterMineTeam.debug("STORAGE: Loaded Captain: {} -> {}", key, uuid);
+                });
             }
         }
         if (tag.contains("TeamGlowDefaults")) {
-            CompoundTag glowDefaultsTag = tag.getCompound("TeamGlowDefaults");
-            for (String key : glowDefaultsTag.getAllKeys()) {
-                data.teamGlowDefaults.put(key, glowDefaultsTag.getBoolean(key));
-                BetterMineTeam.debug("STORAGE: Loaded Glow Default: {} -> {}", key, glowDefaultsTag.getBoolean(key));
+            CompoundTag glowDefaultsTag = tag.getCompoundOrEmpty("TeamGlowDefaults");
+            for (String key : glowDefaultsTag.keySet()) {
+                boolean enabled = glowDefaultsTag.getBooleanOr(key, BMTConfig.isDefaultGlowEnabled());
+                data.teamGlowDefaults.put(key, enabled);
+                BetterMineTeam.debug("STORAGE: Loaded Glow Default: {} -> {}", key, enabled);
             }
         }
         if (tag.contains("TeamGlowRevisions")) {
-            CompoundTag glowRevisionsTag = tag.getCompound("TeamGlowRevisions");
-            for (String key : glowRevisionsTag.getAllKeys()) {
-                data.teamGlowRevisions.put(key, glowRevisionsTag.getInt(key));
+            CompoundTag glowRevisionsTag = tag.getCompoundOrEmpty("TeamGlowRevisions");
+            for (String key : glowRevisionsTag.keySet()) {
+                data.teamGlowRevisions.put(key, glowRevisionsTag.getIntOr(key, 0));
             }
         }
         if (tag.contains("PersonalTeamPreferences")) {
-            CompoundTag preferencesTag = tag.getCompound("PersonalTeamPreferences");
-            for (String key : preferencesTag.getAllKeys()) {
+            CompoundTag preferencesTag = tag.getCompoundOrEmpty("PersonalTeamPreferences");
+            for (String key : preferencesTag.keySet()) {
                 try {
-                    data.personalTeamPreferences.put(UUID.fromString(key), preferencesTag.getBoolean(key));
+                    data.personalTeamPreferences.put(UUID.fromString(key), preferencesTag.getBooleanOr(key, false));
                 } catch (IllegalArgumentException ignored) {
                 }
             }
         }
         if (tag.contains("PersonalTeamOwners")) {
-            CompoundTag ownersTag = tag.getCompound("PersonalTeamOwners");
-            for (String key : ownersTag.getAllKeys()) {
-                UUID uuid = ownersTag.getUUID(key);
-                data.personalTeamOwners.put(key, uuid);
-                BetterMineTeam.debug("STORAGE: Loaded Personal Team: {} -> {}", key, uuid);
+            CompoundTag ownersTag = tag.getCompoundOrEmpty("PersonalTeamOwners");
+            for (String key : ownersTag.keySet()) {
+                parseUuid(ownersTag, key).ifPresent(uuid -> {
+                    data.personalTeamOwners.put(key, uuid);
+                    BetterMineTeam.debug("STORAGE: Loaded Personal Team: {} -> {}", key, uuid);
+                });
             }
         }
         if (tag.contains("PersonalTeamEmptySince")) {
-            CompoundTag emptySinceTag = tag.getCompound("PersonalTeamEmptySince");
-            for (String key : emptySinceTag.getAllKeys()) {
-                data.personalTeamEmptySince.put(key, emptySinceTag.getLong(key));
+            CompoundTag emptySinceTag = tag.getCompoundOrEmpty("PersonalTeamEmptySince");
+            for (String key : emptySinceTag.keySet()) {
+                data.personalTeamEmptySince.put(key, emptySinceTag.getLongOr(key, -1L));
             }
         }
         return data;
+    }
+
+    private static java.util.Optional<UUID> parseUuid(CompoundTag tag, String key) {
+        try {
+            return tag.getString(key).map(UUID::fromString);
+        } catch (IllegalArgumentException ignored) {
+            return java.util.Optional.empty();
+        }
     }
 }

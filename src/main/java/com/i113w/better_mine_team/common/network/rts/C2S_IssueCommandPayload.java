@@ -7,7 +7,7 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 import java.util.List;
 
@@ -15,7 +15,7 @@ import java.util.List;
 public record C2S_IssueCommandPayload(CommandType commandType, CommandTarget target, List<Integer> secondaryTargetIds, int selectionRevision) implements CustomPacketPayload {
 
     public static final Type<C2S_IssueCommandPayload> TYPE =
-            new Type<>(ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "rts_issue_cmd"));
+            new Type<>(Identifier.fromNamespaceAndPath(BetterMineTeam.MODID, "rts_issue_cmd"));
 
     public static final StreamCodec<ByteBuf, C2S_IssueCommandPayload> STREAM_CODEC = StreamCodec.composite(
             CommandType.STREAM_CODEC, C2S_IssueCommandPayload::commandType,

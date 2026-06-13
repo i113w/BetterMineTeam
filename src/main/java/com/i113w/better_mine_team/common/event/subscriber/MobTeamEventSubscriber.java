@@ -1,8 +1,6 @@
 package com.i113w.better_mine_team.common.event.subscriber;
 
 import com.i113w.better_mine_team.BetterMineTeam;
-import com.i113w.better_mine_team.common.compat.LoadedCompat;
-import com.i113w.better_mine_team.common.compat.irons_spellbooks.IronsSpellbooksCompat;
 import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.entity.goal.AggressiveScanGoal;
 import com.i113w.better_mine_team.common.entity.goal.GoalSanitizer;
@@ -17,8 +15,8 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.boss.EnderDragonPart;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
+import net.minecraft.world.entity.boss.enderdragon.EnderDragonPart;
 import net.minecraft.world.entity.monster.Vex;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -72,7 +70,7 @@ public class MobTeamEventSubscriber {
 
     @SubscribeEvent
     public static void onEntityJoinWorld(EntityJoinLevelEvent event) {
-        if (event.getLevel().isClientSide) return;
+        if (event.getLevel().isClientSide()) return;
 
         if (BMTConfig.isSummonAutoJoinEnabled() && event.getEntity() instanceof LivingEntity living) {
             handleSummonedEntityTeam(living, (ServerLevel) event.getLevel());
@@ -169,17 +167,6 @@ public class MobTeamEventSubscriber {
 
     @Nullable
     private static LivingEntity getSummonOwner(LivingEntity entity) {
-        // --- 优先级 1: 模组兼容 ---
-
-        // Iron's Spells n' Spellbooks
-        if (LoadedCompat.IRONS_SPELLBOOKS) {
-            // 这里我们调用一个隔离的类，防止 ClassNotFoundException
-            LivingEntity modOwner = IronsSpellbooksCompat.getSummonOwner(entity);
-            if (modOwner != null) return modOwner;
-        }
-
-        // --- 优先级 2: 原版通用接口 ---
-
         // OwnableEntity (原版狼、猫、鹦鹉等)
         if (entity instanceof OwnableEntity ownable) {
             Entity owner = ownable.getOwner();
@@ -202,7 +189,7 @@ public class MobTeamEventSubscriber {
 
     @SubscribeEvent
     public static void onPlayerInteractEntityInteract(PlayerInteractEvent.EntityInteract event) {
-        if (BetterMineTeam.IS_CONFLUENCE_LOADED) return;
+        if (BetterMineTeam.isConfluenceLoaded()) return;
         Level level = event.getLevel();
 
         if (level.isClientSide()) {
@@ -287,14 +274,14 @@ public class MobTeamEventSubscriber {
 
             if (!itemstack.isEmpty() && tamingMaterial.test(itemstack)) {
                 if (!TeamPermissions.hasOverridePermission(player)) {
-                    player.displayClientMessage(Component.translatable("better_mine_team.msg.dragon_tame_permission_denied").withStyle(ChatFormatting.RED), true);
+                    player.sendOverlayMessage(Component.translatable("better_mine_team.msg.dragon_tame_permission_denied").withStyle(ChatFormatting.RED));
                     event.setCanceled(true);
                     event.setCancellationResult(InteractionResult.FAIL);
                     return;
                 }
                 if (targetTeam != null) return;
                 if (playerTeam == null) {
-                    player.displayClientMessage(Component.translatable("message.better_mine_team.error.no_team_specified", player.getName()), true);
+                    player.sendOverlayMessage(Component.translatable("message.better_mine_team.error.no_team_specified", player.getName()));
                     return;
                 }
                 itemstack.consume(1, player);
@@ -302,7 +289,7 @@ public class MobTeamEventSubscriber {
                 dragon.setHealth(dragon.getMaxHealth());
 
                 // [修改] 使用本地化键
-                player.displayClientMessage(Component.translatable("better_mine_team.msg.dragon_tame_success").withStyle(ChatFormatting.LIGHT_PURPLE), true);
+                player.sendOverlayMessage(Component.translatable("better_mine_team.msg.dragon_tame_success").withStyle(ChatFormatting.LIGHT_PURPLE));
 
                 TeamManager.syncGlowWithTeamDefault(dragon);
                 event.setCanceled(true);

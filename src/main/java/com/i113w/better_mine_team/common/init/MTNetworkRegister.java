@@ -5,6 +5,7 @@ import com.i113w.better_mine_team.common.network.handler.ServerPacketHandler;
 import com.i113w.better_mine_team.common.network.rts.C2S_IssueCommandPayload;
 import com.i113w.better_mine_team.common.network.rts.C2S_SelectionSyncPayload;
 import com.i113w.better_mine_team.common.network.rts.S2C_CommandAckPayload;
+import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
@@ -30,7 +31,7 @@ public class MTNetworkRegister {
         registrar.playBidirectional(
                 TeamManagementPayload.TYPE,
                 TeamManagementPayload.STREAM_CODEC,
-                TeamManagementPayload::handle
+                TeamManagementPayload::serverHandle
         );
 
         registrar.playToServer(
@@ -43,6 +44,12 @@ public class MTNetworkRegister {
                 DragonDismountPayload.TYPE,
                 DragonDismountPayload.STREAM_CODEC,
                 DragonDismountPayload::serverHandle
+        );
+
+        registrar.playToClient(
+                S2C_DragonSpeedPayload.TYPE,
+                S2C_DragonSpeedPayload.STREAM_CODEC,
+                S2C_DragonSpeedPayload::clientHandle
         );
 
         // --- [新增] RTS 模块网络包 ---
@@ -78,6 +85,13 @@ public class MTNetworkRegister {
                 S2C_PersonalTeamStatePayload.TYPE,
                 S2C_PersonalTeamStatePayload.STREAM_CODEC,
                 S2C_PersonalTeamStatePayload::clientHandle
+        );
+    }
+
+    public static void registerClientPayloads(final RegisterClientPayloadHandlersEvent event) {
+        event.register(
+                TeamManagementPayload.TYPE,
+                TeamManagementPayload::clientHandle
         );
     }
 }

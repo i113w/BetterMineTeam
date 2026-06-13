@@ -24,7 +24,7 @@ public final class ClientTeamUiState {
     }
 
     public static boolean isLocalPlayerCaptain(Player player) {
-        return player != null && player.getPersistentData().getBoolean(TeamManagementPayload.TAG_CLIENT_IS_CAPTAIN);
+        return player != null && player.getPersistentData().getBooleanOr(TeamManagementPayload.TAG_CLIENT_IS_CAPTAIN, false);
     }
 
     public static void setLocalPlayerCaptain(Player player, boolean isCaptain) {
@@ -34,11 +34,11 @@ public final class ClientTeamUiState {
     }
 
     public static boolean isPersonalTeamsAvailable(Player player) {
-        return player != null && player.getPersistentData().getBoolean(TAG_PERSONAL_TEAMS_AVAILABLE);
+        return player != null && player.getPersistentData().getBooleanOr(TAG_PERSONAL_TEAMS_AVAILABLE, false);
     }
 
     public static boolean isPersonalTeamEnabled(Player player) {
-        return player != null && player.getPersistentData().getBoolean(TAG_PERSONAL_TEAM_ENABLED);
+        return player != null && player.getPersistentData().getBooleanOr(TAG_PERSONAL_TEAM_ENABLED, false);
     }
 
     public static void setPersonalTeamState(Player player, boolean available, boolean enabled) {

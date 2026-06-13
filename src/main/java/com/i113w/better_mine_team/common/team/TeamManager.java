@@ -276,15 +276,15 @@ public class TeamManager {
         if (player == null) return false;
         PlayerTeam currentTeam = getTeam(player);
         if (currentTeam == null) return false;
-        return TeamDataStorage.get(player.serverLevel()).isPersonalTeamOwner(currentTeam.getName(), player.getUUID());
+        return TeamDataStorage.get(player.level()).isPersonalTeamOwner(currentTeam.getName(), player.getUUID());
     }
 
     public static PlayerTeam getOrCreatePersonalTeam(ServerPlayer player) {
-        MinecraftServer server = player.getServer();
+        MinecraftServer server = player.level().getServer();
         if (server == null) return null;
 
         Scoreboard scoreboard = server.getScoreboard();
-        TeamDataStorage storage = TeamDataStorage.get(player.serverLevel());
+        TeamDataStorage storage = TeamDataStorage.get(player.level());
         String teamName = getOrAllocatePersonalTeamName(scoreboard, storage, player.getUUID());
 
         PlayerTeam personalTeam = scoreboard.getPlayerTeam(teamName);
@@ -303,8 +303,8 @@ public class TeamManager {
         PlayerTeam personalTeam = getOrCreatePersonalTeam(player);
         if (personalTeam == null) return false;
 
-        TeamDataStorage storage = TeamDataStorage.get(player.serverLevel());
-        Scoreboard scoreboard = player.getServer().getScoreboard();
+        TeamDataStorage storage = TeamDataStorage.get(player.level());
+        Scoreboard scoreboard = player.level().getScoreboard();
         PlayerTeam previousTeam = getTeam(player);
         boolean changedTeam = previousTeam == null || !previousTeam.getName().equals(personalTeam.getName());
 
@@ -319,14 +319,14 @@ public class TeamManager {
 
         if (changedTeam) {
             if (previousTeam != null) {
-                player.displayClientMessage(Component.translatable(
+                player.sendOverlayMessage(Component.translatable(
                         "better_mine_team.msg.personal_team_joined_left_previous",
                         previousTeam.getDisplayName()
-                ).withStyle(ChatFormatting.GOLD), true);
+                ).withStyle(ChatFormatting.GOLD));
             } else if (notifyWithoutPreviousTeam) {
-                player.displayClientMessage(Component.translatable(
+                player.sendOverlayMessage(Component.translatable(
                         "better_mine_team.msg.personal_team_joined"
-                ).withStyle(ChatFormatting.GOLD), true);
+                ).withStyle(ChatFormatting.GOLD));
             }
         }
 
@@ -336,19 +336,19 @@ public class TeamManager {
     public static boolean leaveOwnedPersonalTeam(ServerPlayer player, boolean notify) {
         if (player == null) return false;
 
-        TeamDataStorage storage = TeamDataStorage.get(player.serverLevel());
+        TeamDataStorage storage = TeamDataStorage.get(player.level());
         PlayerTeam currentTeam = getTeam(player);
         if (!isOwnedPersonalTeam(currentTeam, player, storage)) {
             return false;
         }
 
-        player.serverLevel().getScoreboard().removePlayerFromTeam(player.getScoreboardName(), currentTeam);
+        player.level().getScoreboard().removePlayerFromTeam(player.getScoreboardName(), currentTeam);
         storage.removeCaptain(currentTeam.getName());
 
         if (notify) {
-            player.displayClientMessage(Component.translatable(
+            player.sendOverlayMessage(Component.translatable(
                     "better_mine_team.msg.personal_team_left"
-            ).withStyle(ChatFormatting.GRAY), true);
+            ).withStyle(ChatFormatting.GRAY));
         }
 
         return true;
@@ -463,7 +463,7 @@ public class TeamManager {
         if (!data.contains("bmt_aggressive_level")) {
             return BMTConfig.getDefaultAggressiveLevel();
         }
-        return Mth.clamp(data.getInt("bmt_aggressive_level"), 0, 2);
+        return Mth.clamp(data.getIntOr("bmt_aggressive_level", BMTConfig.getDefaultAggressiveLevel()), 0, 2);
     }
 
     /**
@@ -480,7 +480,7 @@ public class TeamManager {
     public static boolean isGlowEnabled(LivingEntity entity) {
         CompoundTag data = entity.getPersistentData();
         if (data.contains(TAG_GLOW_ENABLED)) {
-            return data.getBoolean(TAG_GLOW_ENABLED);
+            return data.getBooleanOr(TAG_GLOW_ENABLED, entity.hasGlowingTag());
         }
         return entity.hasGlowingTag();
     }
@@ -512,12 +512,12 @@ public class TeamManager {
         int teamRevision = storage.getTeamGlowRevision(team.getName());
         CompoundTag data = entity.getPersistentData();
 
-        if (!data.contains(TAG_GLOW_ENABLED) || data.getInt(TAG_GLOW_REVISION) < teamRevision) {
+        if (!data.contains(TAG_GLOW_ENABLED) || data.getIntOr(TAG_GLOW_REVISION, 0) < teamRevision) {
             setGlowEnabled(entity, storage.getTeamGlowDefault(team.getName()), teamRevision);
             return;
         }
 
-        entity.setGlowingTag(data.getBoolean(TAG_GLOW_ENABLED));
+        entity.setGlowingTag(data.getBooleanOr(TAG_GLOW_ENABLED, false));
     }
 
     public static int setTeamGlowEnabled(MinecraftServer server, PlayerTeam team, boolean enabled) {

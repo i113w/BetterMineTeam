@@ -24,7 +24,7 @@ public class LivingEventSubscriber {
     @SubscribeEvent
     public static void onSlimeTick(EntityTickEvent.Pre event) {
         // 仅服务端运行
-        if (event.getEntity().level().isClientSide) return;
+        if (event.getEntity().level().isClientSide()) return;
 
         if (event.getEntity() instanceof Slime slime) {
             // 保留原版大小检查（可选）
@@ -55,7 +55,7 @@ public class LivingEventSubscriber {
         LivingEntity attacker = event.getEntity();
         LivingEntity newTarget = event.getNewAboutToBeSetTarget();
 
-        if (attacker.level().isClientSide || newTarget == null) return;
+        if (attacker.level().isClientSide() || newTarget == null) return;
 
         PlayerTeam attackerTeam = TeamManager.getTeam(attacker);
         PlayerTeam targetTeam = TeamManager.getTeam(newTarget);
@@ -176,7 +176,7 @@ public class LivingEventSubscriber {
     @SubscribeEvent
     public static void onLivingDeath(LivingDeathEvent event) {
         LivingEntity victim = event.getEntity();
-        if (victim.level().isClientSide) return;
+        if (victim.level().isClientSide()) return;
 
         // 1. 常规清理 (移除死者)
         TeamManager.onTargetDeath(victim);

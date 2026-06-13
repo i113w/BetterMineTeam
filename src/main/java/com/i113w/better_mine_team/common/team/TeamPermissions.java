@@ -9,7 +9,7 @@ public class TeamPermissions {
      * 检查玩家是否拥有管理权限
      */
     public static boolean hasOverridePermission(Player player) {
-        return player.getPersistentData().getBoolean(TAG_ADMIN_OVERRIDE);
+        return player.getPersistentData().getBooleanOr(TAG_ADMIN_OVERRIDE, false);
     }
 
     /**

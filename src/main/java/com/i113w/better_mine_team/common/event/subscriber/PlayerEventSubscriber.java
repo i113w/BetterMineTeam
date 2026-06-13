@@ -40,7 +40,7 @@ public class PlayerEventSubscriber {
 
     private static void handlePersonalTeamLogin(ServerPlayer player) {
         if (BMTConfig.isPersonalTeamsEnabled()) {
-            TeamDataStorage storage = TeamDataStorage.get(player.serverLevel());
+            TeamDataStorage storage = TeamDataStorage.get(player.level());
             if (storage.getPersonalTeamPreference(player)) {
                 TeamManager.joinPersonalTeam(player, false);
             }
@@ -49,7 +49,7 @@ public class PlayerEventSubscriber {
     }
 
     public static void syncPersonalTeamState(ServerPlayer player) {
-        TeamDataStorage storage = TeamDataStorage.get(player.serverLevel());
+        TeamDataStorage storage = TeamDataStorage.get(player.level());
         boolean available = BMTConfig.isPersonalTeamsEnabled();
         boolean enabled = available && storage.getPersonalTeamPreference(player);
         PacketDistributor.sendToPlayer(player, new S2C_PersonalTeamStatePayload(available, enabled));

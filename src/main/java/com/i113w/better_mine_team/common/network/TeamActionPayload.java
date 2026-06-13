@@ -11,7 +11,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.DyeColor;
@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
 
 public record TeamActionPayload(int action, String data, boolean state) implements CustomPacketPayload {
 
-    public static final Type<TeamActionPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BetterMineTeam.MODID, "team_action"));
+    public static final Type<TeamActionPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(BetterMineTeam.MODID, "team_action"));
     public static final int ACTION_CHANGE_TEAM = 0;
     public static final int ACTION_SET_PVP = 1;
     public static final int ACTION_SET_PERSONAL_TEAM = 2;
@@ -48,20 +48,19 @@ public record TeamActionPayload(int action, String data, boolean state) implemen
     public static void serverHandle(final TeamActionPayload payload, final IPayloadContext context) {
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer player)) return;
-            MinecraftServer server = player.getServer();
+            MinecraftServer server = player.level().getServer();
             if (server == null) return;
 
             Scoreboard scoreboard = server.getScoreboard();
 
-            TeamDataStorage storage = TeamDataStorage.get(player.serverLevel());
+            TeamDataStorage storage = TeamDataStorage.get(player.level());
 
             // Action 0: 切换队伍
             if (payload.action == ACTION_CHANGE_TEAM) {
                 if (BMTConfig.isPersonalTeamsEnabled() && storage.getPersonalTeamPreference(player)) {
-                    player.displayClientMessage(
+                    player.sendOverlayMessage(
                             Component.translatable("better_mine_team.msg.personal_team_select_blocked")
-                                    .withStyle(ChatFormatting.RED),
-                            true
+                                    .withStyle(ChatFormatting.RED)
                     );
                     PlayerEventSubscriber.syncPersonalTeamState(player);
                     return;
@@ -99,10 +98,9 @@ public record TeamActionPayload(int action, String data, boolean state) implemen
                             // 如果没有其他玩家，直接上位
                             if (!hasOtherPlayers) {
                                 storage.setCaptain(newTeamName, player.getUUID());
-                                player.displayClientMessage(
+                                player.sendOverlayMessage(
                                         Component.translatable("better_mine_team.msg.auto_captain_granted", newTeam.getDisplayName())
-                                                .withStyle(ChatFormatting.GOLD),
-                                        true
+                                                .withStyle(ChatFormatting.GOLD)
                                 );
                                 BetterMineTeam.debug("Auto-assigned captain to {} for team {}", player.getName().getString(), newTeamName);
                             }
@@ -125,10 +123,9 @@ public record TeamActionPayload(int action, String data, boolean state) implemen
             else if (payload.action == ACTION_SET_PERSONAL_TEAM) {
                 if (!BMTConfig.isPersonalTeamsEnabled()) {
                     storage.setPersonalTeamPreference(player.getUUID(), false);
-                    player.displayClientMessage(
+                    player.sendOverlayMessage(
                             Component.translatable("better_mine_team.msg.personal_team_disabled_by_server")
-                                    .withStyle(ChatFormatting.RED),
-                            true
+                                    .withStyle(ChatFormatting.RED)
                     );
                     PlayerEventSubscriber.syncPersonalTeamState(player);
                     return;
