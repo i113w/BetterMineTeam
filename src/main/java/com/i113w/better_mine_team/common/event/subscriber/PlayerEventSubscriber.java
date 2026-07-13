@@ -4,6 +4,7 @@ import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.network.S2C_PersonalTeamStatePayload;
 import com.i113w.better_mine_team.common.network.S2C_SyncTeamLordPayload;
+import com.i113w.better_mine_team.common.network.rts.S2C_PatrolSettingsPayload;
 import com.i113w.better_mine_team.common.team.TeamDataStorage;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import com.i113w.better_mine_team.common.team.TeamPermissions;
@@ -23,6 +24,7 @@ public class PlayerEventSubscriber {
             boolean hasPerm = TeamPermissions.hasOverridePermission(player);
             // 发送包同步给客户端
             PacketDistributor.sendToPlayer(player, new S2C_SyncTeamLordPayload(hasPerm));
+            PacketDistributor.sendToPlayer(player, S2C_PatrolSettingsPayload.current());
             BetterMineTeam.debug("Synced TeamsLord permission to {}: {}", player.getName().getString(), hasPerm);
             handlePersonalTeamLogin(player);
         }

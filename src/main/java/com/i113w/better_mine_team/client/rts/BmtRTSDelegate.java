@@ -7,6 +7,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.TamableAnimal;
 import org.jetbrains.annotations.Nullable;
 
 public class BmtRTSDelegate implements IRTSInteractionDelegate {
@@ -21,6 +22,12 @@ public class BmtRTSDelegate implements IRTSInteractionDelegate {
         if (!(entity instanceof LivingEntity living) || !living.isAlive()) return false;
         if (entity == mc.player) return false;
         if (!(entity instanceof net.minecraft.world.entity.PathfinderMob)) return false;
+        if (BmtRTSManager.getMode() == BmtRTSManager.RTSMode.PATROL) {
+            if (!ClientPatrolSettings.get().enabled()) return false;
+            if (mc.player == null) return false;
+            if (TeamManager.isAlly(mc.player, living)) return true;
+            return entity instanceof TamableAnimal tamable && tamable.isOwnedBy(mc.player);
+        }
         return true;
     }
 

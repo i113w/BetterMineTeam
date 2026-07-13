@@ -14,6 +14,7 @@ public class RTSUnitData implements INBTSerializable<CompoundTag> {
     private Vec3 anchorPos = Vec3.ZERO; // [新增] 锚点，用于 HOLD 模式下的回防
     private int targetEntityId = -1;
     private boolean isRtsControlled = false; // 是否已被纳入 RTS 控制体系
+    private PatrolTask patrolTask = PatrolTask.disabled();
 
     // === Setters ===
     public void setMoveCommand(Vec3 pos) {
@@ -35,12 +36,21 @@ public class RTSUnitData implements INBTSerializable<CompoundTag> {
 
     public void setControlled(boolean val) { this.isRtsControlled = val; }
 
+    public void setPatrolTask(PatrolTask task) {
+        this.patrolTask = task == null ? PatrolTask.disabled() : task;
+    }
+
+    public void clearPatrolTask() {
+        this.patrolTask = PatrolTask.disabled();
+    }
+
     // === Getters ===
     public CommandType getCommand() { return currentCommand; }
     public Vec3 getTargetPos() { return targetPos; }
     public Vec3 getAnchorPos() { return anchorPos; }
     public int getTargetEntityId() { return targetEntityId; }
     public boolean isControlled() { return isRtsControlled; }
+    public PatrolTask getPatrolTask() { return patrolTask; }
 
     // === NBT ===
     @Override
@@ -55,6 +65,7 @@ public class RTSUnitData implements INBTSerializable<CompoundTag> {
         tag.putDouble("Az", anchorPos.z);
         tag.putInt("TEnt", targetEntityId);
         tag.putBoolean("Ctrl", isRtsControlled);
+        tag.put("Patrol", patrolTask.save());
         return tag;
     }
 
@@ -69,5 +80,6 @@ public class RTSUnitData implements INBTSerializable<CompoundTag> {
         this.anchorPos = new Vec3(tag.getDouble("Ax"), tag.getDouble("Ay"), tag.getDouble("Az"));
         this.targetEntityId = tag.getInt("TEnt");
         this.isRtsControlled = tag.getBoolean("Ctrl");
+        this.patrolTask = tag.contains("Patrol") ? PatrolTask.load(tag.getCompound("Patrol")) : PatrolTask.disabled();
     }
 }
