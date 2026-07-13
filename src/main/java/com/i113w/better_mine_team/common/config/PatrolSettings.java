@@ -24,6 +24,9 @@ public record PatrolSettings(
         int routeRetryDelayTicks,
         int pathFailureCooldownTicks,
         int maxResumeDelayTicks,
+        double combatLeashMinPadding,
+        double combatLeashScale,
+        int combatLeashCheckIntervalTicks,
         long revision
 ) {
     public static final PatrolSettings DEFAULT = new PatrolSettings(
@@ -44,6 +47,9 @@ public record PatrolSettings(
             60,
             40,
             20,
+            4.0D,
+            0.5D,
+            5,
             0L
     );
 

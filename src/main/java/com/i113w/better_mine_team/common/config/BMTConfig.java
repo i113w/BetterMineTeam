@@ -127,6 +127,9 @@ public class BMTConfig {
     private static final ModConfigSpec.IntValue patrolRouteRetryDelayTicks;
     private static final ModConfigSpec.IntValue patrolPathFailureCooldownTicks;
     private static final ModConfigSpec.IntValue patrolMaxResumeDelayTicks;
+    private static final ModConfigSpec.DoubleValue patrolCombatLeashMinPadding;
+    private static final ModConfigSpec.DoubleValue patrolCombatLeashScale;
+    private static final ModConfigSpec.IntValue patrolCombatLeashCheckIntervalTicks;
     private static volatile PatrolSettings patrolSettings = PatrolSettings.DEFAULT;
     private static long patrolSettingsRevision;
 
@@ -391,6 +394,15 @@ public class BMTConfig {
         patrolMaxResumeDelayTicks = builder
                 .comment("Maximum remaining Patrol wait retained after combat or another interruption.")
                 .defineInRange("maxResumeDelayTicks", 20, 0, 200);
+        patrolCombatLeashMinPadding = builder
+                .comment("Minimum horizontal padding, in blocks, added around a Patrol area for combat.")
+                .defineInRange("combatLeashMinPadding", 8.0D, 0.0D, 128.0D);
+        patrolCombatLeashScale = builder
+                .comment("Additional Patrol combat padding as a fraction of the point radius or area half-extent.")
+                .defineInRange("combatLeashScale", 1.0D, 0.0D, 4.0D);
+        patrolCombatLeashCheckIntervalTicks = builder
+                .comment("Ticks between lightweight checks that stop Patrol mobs pursuing beyond their combat boundary.")
+                .defineInRange("combatLeashCheckIntervalTicks", 5, 1, 100);
         builder.pop();
 
         builder.push("dragon");
@@ -538,6 +550,9 @@ public class BMTConfig {
                 patrolRouteRetryDelayTicks.get(),
                 patrolPathFailureCooldownTicks.get(),
                 patrolMaxResumeDelayTicks.get(),
+                patrolCombatLeashMinPadding.get(),
+                patrolCombatLeashScale.get(),
+                patrolCombatLeashCheckIntervalTicks.get(),
                 ++patrolSettingsRevision
         );
     }

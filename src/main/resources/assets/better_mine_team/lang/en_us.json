@@ -72,5 +72,7 @@
 "better_mine_team.msg.personal_team_joined_left_previous": "Joined your personal team and left previous team %s",
 "better_mine_team.msg.personal_team_left": "Left your personal team",
 "better_mine_team.msg.personal_team_select_blocked": "Personal team is enabled. Turn it off before choosing a public team",
-"better_mine_team.gui.tooltip.personal_team": "Personal Team"
+"better_mine_team.gui.tooltip.personal_team": "Personal Team",
+"better_mine_team.msg.cmd_attack_patrol_blocked": "No selected unit can attack that target without leaving its patrol boundary",
+"better_mine_team.msg.cmd_attack_patrol_partial": "%s of %s units received the attack command; patrol boundaries blocked the rest"
 }

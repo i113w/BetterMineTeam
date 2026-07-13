@@ -12,6 +12,7 @@ import com.i113w.better_mine_team.common.network.rts.S2C_CommandAckPayload;
 import com.i113w.better_mine_team.common.network.rts.S2C_PatrolSyncPayload;
 import com.i113w.better_mine_team.common.registry.ModAttachments;
 import com.i113w.better_mine_team.common.rts.ai.PatrolTargeting;
+import com.i113w.better_mine_team.common.rts.ai.PatrolCombatBoundary;
 import com.i113w.better_mine_team.common.rts.ai.RTSUnitAIController;
 import com.i113w.better_mine_team.common.rts.data.RTSPlayerData;
 import com.i113w.better_mine_team.common.rts.data.RTSUnitData;
@@ -108,10 +109,29 @@ public class ServerPacketHandler {
                 return;
             }
 
+            if (payload.commandType() == com.i113w.better_mine_team.common.network.data.CommandType.ATTACK) {
+                int attackCount = executeAttackCommand(validUnits, level,
+                        payload.target().targetEntityId(), payload.secondaryTargetIds());
+                if (attackCount == 0) {
+                    sendAck(player, false, 0,
+                            Component.translatable("better_mine_team.msg.cmd_attack_patrol_blocked")
+                                    .withStyle(ChatFormatting.RED));
+                } else if (attackCount < successCount) {
+                    sendAck(player, true, attackCount,
+                            Component.translatable("better_mine_team.msg.cmd_attack_patrol_partial", attackCount, successCount)
+                                    .withStyle(ChatFormatting.YELLOW));
+                } else {
+                    sendAck(player, true, attackCount,
+                            Component.translatable("better_mine_team.msg.cmd_ack", attackCount)
+                                    .withStyle(ChatFormatting.GREEN));
+                }
+                return;
+            }
+
             // 执行指令
             switch (payload.commandType()) {
                 case MOVE    -> executeMoveCommand(validUnits, payload.target().pos());
-                case ATTACK  -> executeAttackCommand(validUnits, level, payload.target().targetEntityId(), payload.secondaryTargetIds());
+                case ATTACK  -> { }
                 case STOP    -> executeStopCommand(validUnits);
                 case RECRUIT -> executeRecruitCommand(player, validUnits);
             }
@@ -192,8 +212,8 @@ public class ServerPacketHandler {
         }
     }
 
-    private static void executeAttackCommand(List<Mob> units, Level level,
-                                             int primaryTargetId, List<Integer> secondaryTargetIds) {
+    private static int executeAttackCommand(List<Mob> units, Level level,
+                                            int primaryTargetId, List<Integer> secondaryTargetIds) {
         List<Entity> allTargets = new ArrayList<>();
         Entity primaryTarget = level.getEntity(primaryTargetId);
         if (primaryTarget != null) allTargets.add(primaryTarget);
@@ -203,50 +223,37 @@ public class ServerPacketHandler {
             if (e != null && e != primaryTarget) allTargets.add(e);
         }
 
-        if (allTargets.isEmpty()) return;
+        if (allTargets.isEmpty()) return 0;
 
         BetterMineTeam.debug("[RTS-ATTACK-CMD] Units: {}, Targets: {}", units.size(), allTargets.size());
 
-        // 2. 处理团队混战逻辑 (Team Aggression)
+        int accepted = 0;
         for (Mob unit : units) {
             PlayerTeam unitTeam = TeamManager.getTeam(unit);
             if (unitTeam == null) continue;
 
+            LivingEntity assignedTarget = null;
             for (Entity target : allTargets) {
                 if (!(target instanceof LivingEntity livingTarget)) continue;
+                if (!livingTarget.isAlive()) continue;
                 if (TeamManager.isAlly(unit, livingTarget)) continue;
-                PlayerTeam targetTeam = TeamManager.getTeam(target);
+                if (!PatrolCombatBoundary.canEngage(unit, livingTarget)) continue;
+                assignedTarget = livingTarget;
+                break;
+            }
 
-                if (targetTeam != null) {
-                    TeamManager.scanAndAddThreats(unitTeam, targetTeam, livingTarget);
-                    // [可选] 双向宣战
-                    TeamManager.scanAndAddThreats(targetTeam, unitTeam, unit);
-                } else {
-                    TeamManager.addThreat(unitTeam, livingTarget);
-                }
+            if (assignedTarget == null) continue;
+            PlayerTeam targetTeam = TeamManager.getTeam(assignedTarget);
+            if (targetTeam != null) {
+                TeamManager.scanAndAddThreats(unitTeam, targetTeam, assignedTarget);
+                TeamManager.scanAndAddThreats(targetTeam, unitTeam, unit);
+            } else {
+                TeamManager.addThreat(unitTeam, assignedTarget);
             }
+            RTSUnitAIController.setAttackTarget(unit, assignedTarget);
+            accepted++;
         }
-
-        // 3. 分配攻击目标
-        // [修复] 增加类型检查，确保攻击目标是 LivingEntity
-        if (primaryTarget instanceof LivingEntity livingPrimary) {
-            for (Mob unit : units) {
-                if (unit == livingPrimary || TeamManager.isAlly(unit, livingPrimary)) continue;
-                RTSUnitAIController.setAttackTarget(unit, livingPrimary);
-            }
-        } else if (!allTargets.isEmpty()) {
-            LivingEntity fallback = null;
-            for (Entity e : allTargets) {
-                if (e instanceof LivingEntity le && le.isAlive()) { fallback = le; break; }
-            }
-            if (fallback != null) {
-                for (Mob unit : units) {
-                    if (!TeamManager.isAlly(unit, fallback)) {
-                        RTSUnitAIController.setAttackTarget(unit, fallback);
-                    }
-                }
-            }
-        }
+        return accepted;
     }
 
     private static void executeStopCommand(List<Mob> units) {

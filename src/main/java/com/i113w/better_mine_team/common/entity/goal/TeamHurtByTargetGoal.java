@@ -2,6 +2,7 @@ package com.i113w.better_mine_team.common.entity.goal;
 
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.config.BMTConfig;
+import com.i113w.better_mine_team.common.rts.ai.PatrolCombatBoundary;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -96,6 +97,7 @@ public class TeamHurtByTargetGoal extends TargetGoal implements TeamGoal {
 
             List<LivingEntity> closeEnemies = this.mob.level().getEntitiesOfClass(LivingEntity.class, searchBox, entity -> {
                 if (entity == this.mob || !entity.isAlive()) return false;
+                if (!PatrolCombatBoundary.canEngage(this.mob, entity)) return false;
                 PlayerTeam otherTeam = TeamManager.getTeam(entity);
                 return otherTeam != null && otherTeam.getName().equals(enemyTeam.getName());
             });
@@ -115,6 +117,14 @@ public class TeamHurtByTargetGoal extends TargetGoal implements TeamGoal {
         this.mob.setTarget(this.targetToAttack);
         establishCommitment(this.targetToAttack);
         super.start();
+    }
+
+    @Override
+    public boolean canContinueToUse() {
+        LivingEntity current = this.mob.getTarget();
+        return current != null
+                && PatrolCombatBoundary.canEngage(this.mob, current)
+                && super.canContinueToUse();
     }
 
     @Override
@@ -225,6 +235,8 @@ public class TeamHurtByTargetGoal extends TargetGoal implements TeamGoal {
 
         // 条件 3：目标跨维度（O(1) 引用比较）
         if (target.level() != this.mob.level()) return true;
+
+        if (!PatrolCombatBoundary.canEngage(this.mob, target)) return true;
 
         // 条件 4：目标超出 followRange 的 2 倍（注意 distanceToSqr 返回平方值）
         double followRange = this.mob.getAttributeValue(Attributes.FOLLOW_RANGE);
