@@ -13,6 +13,7 @@ import com.i113w.better_mine_team.common.network.rts.S2C_PatrolSyncPacket;
 import com.i113w.better_mine_team.common.network.data.PatrolAction;
 import com.i113w.better_mine_team.common.network.data.CommandType;
 import com.i113w.better_mine_team.common.rts.ai.PatrolTargeting;
+import com.i113w.better_mine_team.common.rts.ai.PatrolCombatBoundary;
 import com.i113w.better_mine_team.common.rts.ai.RTSUnitAIController;
 import com.i113w.better_mine_team.common.rts.data.PatrolTask;
 import com.i113w.better_mine_team.common.rts.data.RTSPlayerData;
@@ -118,9 +119,26 @@ public class ServerPacketHandler {
                 return;
             }
 
+            if (msg.getCommandType() == CommandType.ATTACK) {
+                int attackCount = executeAttackCommand(validUnits, level,
+                        msg.getTarget().targetEntityId(), msg.getSecondaryTargetIds());
+                if (attackCount == 0) {
+                    sendAck(player, false, 0, Component.translatable("better_mine_team.msg.cmd_attack_patrol_blocked")
+                            .withStyle(ChatFormatting.RED));
+                } else if (attackCount < successCount) {
+                    sendAck(player, true, attackCount,
+                            Component.translatable("better_mine_team.msg.cmd_attack_patrol_partial", attackCount, successCount)
+                                    .withStyle(ChatFormatting.YELLOW));
+                } else {
+                    sendAck(player, true, attackCount,
+                            Component.translatable("better_mine_team.msg.cmd_ack", attackCount).withStyle(ChatFormatting.GREEN));
+                }
+                return;
+            }
+
             switch (msg.getCommandType()) {
                 case MOVE   -> executeMoveCommand(validUnits, msg.getTarget().pos());
-                case ATTACK -> executeAttackCommand(validUnits, level, msg.getTarget().targetEntityId(), msg.getSecondaryTargetIds());
+                case ATTACK -> { }
                 case STOP   -> executeStopCommand(validUnits);
                 case RECRUIT -> executeRecruitCommand(player, validUnits);
             }
@@ -203,7 +221,7 @@ public class ServerPacketHandler {
         }
     }
 
-    private static void executeAttackCommand(List<Mob> units, Level level, int primaryTargetId, List<Integer> secondaryTargetIds) {
+    private static int executeAttackCommand(List<Mob> units, Level level, int primaryTargetId, List<Integer> secondaryTargetIds) {
         List<Entity> allTargets = new ArrayList<>();
         Entity primaryTarget = level.getEntity(primaryTargetId);
         if (primaryTarget != null) allTargets.add(primaryTarget);
@@ -211,43 +229,35 @@ public class ServerPacketHandler {
             Entity e = level.getEntity(id);
             if (e != null && e != primaryTarget) allTargets.add(e);
         }
-        if (allTargets.isEmpty()) return;
+        if (allTargets.isEmpty()) return 0;
 
-        // 传播威胁（团队混战）
+        int accepted = 0;
         for (Mob unit : units) {
             PlayerTeam unitTeam = TeamManager.getTeam(unit);
             if (unitTeam == null) continue;
+
+            LivingEntity assignedTarget = null;
             for (Entity target : allTargets) {
                 if (!(target instanceof LivingEntity livingTarget)) continue;
+                if (!livingTarget.isAlive()) continue;
                 if (TeamManager.isAlly(unit, livingTarget)) continue;
-                PlayerTeam targetTeam = TeamManager.getTeam(target);
-                if (targetTeam != null) {
-                    TeamManager.scanAndAddThreats(unitTeam, targetTeam, livingTarget);
-                    TeamManager.scanAndAddThreats(targetTeam, unitTeam, unit);
-                } else {
-                    TeamManager.addThreat(unitTeam, livingTarget);
-                }
+                if (!PatrolCombatBoundary.canEngage(unit, livingTarget)) continue;
+                assignedTarget = livingTarget;
+                break;
             }
-        }
 
-        // 分配攻击目标
-        LivingEntity effectivePrimary = null;
-        if (primaryTarget instanceof LivingEntity lp && lp.isAlive()) {
-            effectivePrimary = lp;
-        } else {
-            for (Entity e : allTargets) {
-                if (e instanceof LivingEntity le && le.isAlive()) { effectivePrimary = le; break; }
+            if (assignedTarget == null) continue;
+            PlayerTeam targetTeam = TeamManager.getTeam(assignedTarget);
+            if (targetTeam != null) {
+                TeamManager.scanAndAddThreats(unitTeam, targetTeam, assignedTarget);
+                TeamManager.scanAndAddThreats(targetTeam, unitTeam, unit);
+            } else {
+                TeamManager.addThreat(unitTeam, assignedTarget);
             }
+            RTSUnitAIController.setAttackTarget(unit, assignedTarget);
+            accepted++;
         }
-
-        if (effectivePrimary == null) return;
-        final LivingEntity finalTarget = effectivePrimary;
-
-        for (Mob unit : units) {
-            if (!TeamManager.isAlly(unit, finalTarget)) {
-                RTSUnitAIController.setAttackTarget(unit, finalTarget);
-            }
-        }
+        return accepted;
     }
 
     private static void executeStopCommand(List<Mob> units) {

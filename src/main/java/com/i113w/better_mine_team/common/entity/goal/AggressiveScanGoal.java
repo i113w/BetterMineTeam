@@ -3,6 +3,7 @@ package com.i113w.better_mine_team.common.entity.goal;
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.registry.ModTags;
+import com.i113w.better_mine_team.common.rts.ai.PatrolCombatBoundary;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -76,6 +77,7 @@ public class AggressiveScanGoal extends TargetGoal implements TeamGoal {
         LivingEntity currentTarget = mob.getTarget();
         if (currentTarget == null || !currentTarget.isAlive()) return false;
         if (TeamManager.isAlly(mob, currentTarget)) return false;
+        if (!PatrolCombatBoundary.canEngage(mob, currentTarget)) return false;
         return super.canContinueToUse();
     }
 
@@ -101,6 +103,7 @@ public class AggressiveScanGoal extends TargetGoal implements TeamGoal {
     private boolean isValidTarget(LivingEntity candidate, int aggressiveLevel, PlayerTeam myTeam) {
         if (candidate == mob || !candidate.isAlive() || candidate.isSpectator()) return false;
         if (TeamManager.isAlly(mob, candidate)) return false;
+        if (!PatrolCombatBoundary.canEngage(mob, candidate)) return false;
         if (candidate instanceof Mob m && m.isNoAi()) return false;
         if (candidate instanceof Player p && (p.isCreative() || p.isSpectator())) return false;
 

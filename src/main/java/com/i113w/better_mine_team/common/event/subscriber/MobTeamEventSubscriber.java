@@ -9,6 +9,7 @@ import com.i113w.better_mine_team.common.entity.goal.GoalSanitizer;
 import com.i113w.better_mine_team.common.entity.goal.TeamFollowCaptainGoal;
 import com.i113w.better_mine_team.common.entity.goal.TeamHurtByTargetGoal;
 import com.i113w.better_mine_team.common.rts.ai.goal.PatrolGoal;
+import com.i113w.better_mine_team.common.rts.ai.goal.PatrolCombatLeashGoal;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import com.i113w.better_mine_team.common.team.TeamPermissions;
 import net.minecraft.ChatFormatting;
@@ -70,6 +71,11 @@ public class MobTeamEventSubscriber {
             if (!hasPatrol) {
                 pathfinderMob.goalSelector.addGoal(1,
                         new PatrolGoal(pathfinderMob));
+            }
+            boolean hasPatrolLeash = pathfinderMob.goalSelector.getAvailableGoals().stream()
+                    .anyMatch(w -> w.getGoal() instanceof PatrolCombatLeashGoal);
+            if (!hasPatrolLeash) {
+                pathfinderMob.goalSelector.addGoal(0, new PatrolCombatLeashGoal(pathfinderMob));
             }
         }
 

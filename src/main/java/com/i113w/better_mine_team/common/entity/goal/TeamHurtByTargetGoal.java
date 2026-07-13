@@ -2,6 +2,7 @@ package com.i113w.better_mine_team.common.entity.goal;
 
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.config.BMTConfig;
+import com.i113w.better_mine_team.common.rts.ai.PatrolCombatBoundary;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -63,6 +64,7 @@ public class TeamHurtByTargetGoal extends TargetGoal implements TeamGoal {
 
             List<LivingEntity> closeEnemies = this.mob.level().getEntitiesOfClass(LivingEntity.class, searchBox, entity -> {
                 if (entity == this.mob || !entity.isAlive()) return false;
+                if (!PatrolCombatBoundary.canEngage(this.mob, entity)) return false;
                 PlayerTeam otherTeam = TeamManager.getTeam(entity);
                 return otherTeam != null && otherTeam.getName().equals(enemyTeam.getName());
             });
@@ -82,6 +84,13 @@ public class TeamHurtByTargetGoal extends TargetGoal implements TeamGoal {
         establishCommitment(this.targetMob);
 
         super.start(); // 此时 super.start() 会正确读取 targetMob 并锁定
+    }
+
+    @Override
+    public boolean canContinueToUse() {
+        LivingEntity current = this.mob.getTarget();
+        return current != null && PatrolCombatBoundary.canEngage(this.mob, current)
+                && super.canContinueToUse();
     }
 
     @Override
@@ -150,6 +159,7 @@ public class TeamHurtByTargetGoal extends TargetGoal implements TeamGoal {
         LivingEntity target = committedTarget.get();
         if (target == null || !target.isAlive() || target.isRemoved()) return true;
         if (target.level() != this.mob.level()) return true;
+        if (!PatrolCombatBoundary.canEngage(this.mob, target)) return true;
 
         double followRange = this.mob.getAttributeValue(Attributes.FOLLOW_RANGE);
         if (this.mob.distanceToSqr(target) > followRange * followRange * 4.0) return true;

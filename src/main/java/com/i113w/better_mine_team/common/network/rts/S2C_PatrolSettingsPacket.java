@@ -38,6 +38,9 @@ public class S2C_PatrolSettingsPacket {
         buf.writeVarInt(s.routeRetryDelayTicks());
         buf.writeVarInt(s.pathFailureCooldownTicks());
         buf.writeVarInt(s.maxResumeDelayTicks());
+        buf.writeDouble(s.combatLeashMinPadding());
+        buf.writeDouble(s.combatLeashScale());
+        buf.writeVarInt(s.combatLeashCheckIntervalTicks());
         buf.writeVarLong(s.revision());
     }
 
@@ -47,7 +50,8 @@ public class S2C_PatrolSettingsPacket {
                 buf.readDouble(), buf.readDouble(), buf.readVarInt(), buf.readVarInt(),
                 buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(),
                 buf.readVarInt(), buf.readDouble(), buf.readVarInt(), buf.readVarInt(),
-                buf.readVarInt(), buf.readVarLong()
+                buf.readVarInt(), buf.readDouble(), buf.readDouble(), buf.readVarInt(),
+                buf.readVarLong()
         ));
     }
 

@@ -3,6 +3,7 @@ package com.i113w.better_mine_team.common.event.subscriber;
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.rts.ai.goal.PatrolGoal;
+import com.i113w.better_mine_team.common.rts.ai.goal.PatrolCombatLeashGoal;
 import com.i113w.better_mine_team.common.rts.ai.goal.RTSAttackGoal;
 import com.i113w.better_mine_team.common.rts.ai.goal.RTSMoveGoal;
 import com.i113w.better_mine_team.common.rts.data.RTSUnitData;
@@ -37,6 +38,10 @@ public class RTSEntityHandler {
         boolean hasPatrol = mob.goalSelector.getAvailableGoals().stream()
                 .anyMatch(w -> w.getGoal() instanceof PatrolGoal);
         if (!hasPatrol) mob.goalSelector.addGoal(1, new PatrolGoal(mob));
+
+        boolean hasPatrolLeash = mob.goalSelector.getAvailableGoals().stream()
+                .anyMatch(w -> w.getGoal() instanceof PatrolCombatLeashGoal);
+        if (!hasPatrolLeash) mob.goalSelector.addGoal(0, new PatrolCombatLeashGoal(mob));
 
         BetterMineTeam.debug("[RTS-HANDLER] RTS Goals added to: {} (Total goals: {})",
                 mob.getName().getString(),
