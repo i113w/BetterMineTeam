@@ -1,0 +1,267 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+      - neo-1.21.1-dev2
+      - neo-26.1.2-dev1
+      - forge-1.20.1
+    tags:
+      - "Neo-1.21.1-v*"
+      - "Neo-26.1.2-v*"
+      - "Forge-1.20.1-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: "${{ github.ref_type == 'branch' }}"
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_name: ${{ steps.metadata.outputs.artifact_name }}
+      target_branch: ${{ steps.metadata.outputs.target_branch }}
+      release_title: ${{ steps.metadata.outputs.release_title }}
+      latest: ${{ steps.metadata.outputs.latest }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve build and release metadata
+        id: metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          read_property() {
+            sed -n "s/^$1=//p" gradle.properties | tail -n 1 | tr -d '\r'
+          }
+
+          fetch_branch() {
+            local branch="$1"
+            git fetch --no-tags origin "+refs/heads/${branch}:refs/remotes/origin/${branch}"
+          }
+
+          is_on_branch() {
+            git merge-base --is-ancestor "$GITHUB_SHA" "refs/remotes/origin/$1"
+          }
+
+          ref_name="$GITHUB_REF_NAME"
+          target_branch=""
+          tag_prefix=""
+          release_title=""
+          latest="false"
+
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            case "$ref_name" in
+              Neo-1.21.1-v*)
+                java_version="21"
+                tag_prefix="Neo-1.21.1-v"
+                version="${ref_name#${tag_prefix}}"
+                resolved_version="$version"
+                latest="true"
+
+                fetch_branch main
+                if is_on_branch main; then
+                  target_branch="main"
+                elif git ls-remote --exit-code --heads origin neo-1.21.1-dev2 >/dev/null 2>&1; then
+                  fetch_branch neo-1.21.1-dev2
+                  if is_on_branch neo-1.21.1-dev2; then
+                    target_branch="neo-1.21.1-dev2"
+                  fi
+                fi
+                ;;
+              Neo-26.1.2-v*)
+                java_version="25"
+                tag_prefix="Neo-26.1.2-v"
+                version="${ref_name#${tag_prefix}}"
+                resolved_version="2612-${version}"
+                target_branch="neo-26.1.2-dev1"
+                fetch_branch "$target_branch"
+                is_on_branch "$target_branch" || target_branch=""
+                ;;
+              Forge-1.20.1-v*)
+                java_version="17"
+                tag_prefix="Forge-1.20.1-v"
+                version="${ref_name#${tag_prefix}}"
+                resolved_version="1.20.1-${version}"
+                target_branch="forge-1.20.1"
+                fetch_branch "$target_branch"
+                is_on_branch "$target_branch" || target_branch=""
+                ;;
+              *)
+                echo "Unsupported release tag: $ref_name" >&2
+                exit 1
+                ;;
+            esac
+
+            if [[ ! "$version" =~ ^[0-9A-Za-z][0-9A-Za-z._-]*$ ]]; then
+              echo "Invalid version in tag: $version" >&2
+              exit 1
+            fi
+            if [[ -z "$target_branch" ]]; then
+              echo "Tag commit $GITHUB_SHA is not contained in the expected release branch." >&2
+              exit 1
+            fi
+            release_title="${ref_name//-/ }"
+          else
+            target_branch="$ref_name"
+            resolved_version="$(read_property mod_version)"
+            case "$ref_name" in
+              main|neo-1.21.1-dev2) java_version="21" ;;
+              neo-26.1.2-dev1) java_version="25" ;;
+              forge-1.20.1) java_version="17" ;;
+              *)
+                echo "Unsupported build branch: $ref_name" >&2
+                exit 1
+                ;;
+            esac
+          fi
+
+          mod_id="$(read_property mod_id)"
+          if [[ -z "$mod_id" || -z "$resolved_version" ]]; then
+            echo "mod_id or mod_version could not be resolved." >&2
+            exit 1
+          fi
+
+          safe_version="$(printf '%s' "$resolved_version" | tr '/\\:*?\"<>|' '-')"
+          artifact_name="${mod_id}-${safe_version}-${GITHUB_SHA::7}"
+
+          {
+            echo "java_version=$java_version"
+            echo "resolved_version=$resolved_version"
+            echo "mod_id=$mod_id"
+            echo "target_branch=$target_branch"
+            echo "tag_prefix=$tag_prefix"
+            echo "release_title=$release_title"
+            echo "latest=$latest"
+            echo "artifact_name=$artifact_name"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ steps.metadata.outputs.java_version }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            ./gradlew build --stacktrace "-Pmod_version=${{ steps.metadata.outputs.resolved_version }}"
+          else
+            ./gradlew build --stacktrace
+          fi
+
+      - name: Collect distributable JAR
+        id: jar
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="build/libs/${{ steps.metadata.outputs.mod_id }}-${{ steps.metadata.outputs.resolved_version }}.jar"
+          if [[ ! -f "$expected" ]]; then
+            echo "Expected distributable JAR was not produced: $expected" >&2
+            find build/libs -maxdepth 1 -type f -name '*.jar' -print 2>/dev/null || true
+            exit 1
+          fi
+          mkdir -p release-bundle
+          cp "$expected" release-bundle/
+
+      - name: Generate release notes
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags --force origin
+
+          previous_tag=""
+          while IFS= read -r candidate; do
+            [[ -n "$candidate" ]] || continue
+            [[ "$candidate" == "${{ steps.metadata.outputs.tag_prefix }}"* ]] || continue
+            [[ "$candidate" != "$GITHUB_REF_NAME" ]] || continue
+            if git rev-parse --verify --quiet "refs/tags/${candidate}^{commit}" >/dev/null \
+              && git merge-base --is-ancestor "refs/tags/${candidate}^{commit}" "$GITHUB_SHA"; then
+              previous_tag="$candidate"
+              break
+            fi
+          done < <(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq '.[] | select(.draft == false) | .tag_name')
+
+          format="### %s%n%n%b%n%n[\`%h\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/%H)%n"
+          if [[ -n "$previous_tag" ]]; then
+            git log --reverse --no-merges --format="$format" "${previous_tag}..${GITHUB_SHA}" > release-notes.md
+          fi
+          if [[ ! -s release-notes.md ]]; then
+            git show --no-patch --format="$format" "$GITHUB_SHA" > release-notes.md
+          fi
+          cp release-notes.md release-bundle/
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.metadata.outputs.artifact_name }}
+          path: release-bundle/
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Publish GitHub Release
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Download release bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: release-bundle
+
+      - name: Create or update release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          latest_args=(--latest=false)
+          if [[ "${{ needs.build.outputs.latest }}" == "true" ]]; then
+            latest_args=(--latest)
+          fi
+
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" \
+              --title "${{ needs.build.outputs.release_title }}" \
+              --notes-file release-bundle/release-notes.md \
+              --target "${{ needs.build.outputs.target_branch }}" \
+              --draft=false \
+              --prerelease=false \
+              "${latest_args[@]}"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --verify-tag \
+              --title "${{ needs.build.outputs.release_title }}" \
+              --notes-file release-bundle/release-notes.md \
+              --target "${{ needs.build.outputs.target_branch }}" \
+              "${latest_args[@]}"
+          fi
+
+          gh release upload "$GITHUB_REF_NAME" release-bundle/*.jar --clobber
