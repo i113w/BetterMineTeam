@@ -7,6 +7,9 @@ import com.i113w.better_mine_team.common.registry.ModEntities;     // [新增]
 import com.i113w.better_mine_team.data.DataGenerators;
 import com.mojang.logging.LogUtils;
 import com.i113w.better_mine_team.common.config.BMTConfig;
+import com.i113w.better_mine_team.common.config.BMTClientConfig;
+import com.i113w.better_mine_team.common.network.rts.S2C_PatrolSettingsPayload;
+import com.i113w.better_mine_team.common.rts.PatrolTaskReconciler;
 import net.minecraft.resources.Identifier;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
@@ -22,6 +25,8 @@ import net.neoforged.fml.event.config.ModConfigEvent;
 
 import com.i113w.better_mine_team.common.registry.ModMenuTypes;
 import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 @Mod(BetterMineTeam.MODID)
 public class BetterMineTeam {
@@ -37,6 +42,7 @@ public class BetterMineTeam {
         // 注册配置文件
         LOGGER.info("[BMT] register config");
         modContainer.registerConfig(ModConfig.Type.COMMON, BMTConfig.CONFIG, "better_mine_team.toml");
+        modContainer.registerConfig(ModConfig.Type.CLIENT, BMTClientConfig.CONFIG, "better_mine_team-client.toml");
 
         // --- 核心注册 ---
         LOGGER.info("[BMT] register network");
@@ -83,12 +89,25 @@ public class BetterMineTeam {
     public void onConfigLoad(ModConfigEvent.Loading event) {
         if (event.getConfig().getSpec() == BMTConfig.CONFIG) {
             BMTConfig.loadTamingMaterials();
+            BMTConfig.bakePatrolSettings();
+        } else if (event.getConfig().getSpec() == BMTClientConfig.CONFIG) {
+            BMTClientConfig.bakePatrolVisualSettings();
         }
     }
     public void onConfigReload(ModConfigEvent.Reloading event) {
         if (event.getConfig().getSpec() == BMTConfig.CONFIG) {
-            LOGGER.info("Config reloaded, refreshing taming materials...");
+            LOGGER.info("Config reloaded, refreshing cached settings...");
             BMTConfig.loadTamingMaterials();
+            BMTConfig.bakePatrolSettings();
+            var server = ServerLifecycleHooks.getCurrentServer();
+            if (server != null) {
+                server.execute(() -> {
+                    PacketDistributor.sendToAllPlayers(S2C_PatrolSettingsPayload.current());
+                    PatrolTaskReconciler.reconcileLoadedTasks(server);
+                });
+            }
+        } else if (event.getConfig().getSpec() == BMTClientConfig.CONFIG) {
+            BMTClientConfig.bakePatrolVisualSettings();
         }
     }
 }

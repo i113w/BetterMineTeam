@@ -5,6 +5,7 @@ import com.i113w.camera_lib.camera.RTSCameraController;
 public class BmtRTSManager {
     public enum RTSMode {
         CONTROL,
+        PATROL,
         RECRUIT
     }
 
@@ -15,6 +16,9 @@ public class BmtRTSManager {
     private static RTSCameraController.CameraStyle lastCameraStyle = DEFAULT_CAMERA_STYLE;
 
     public static void setMode(RTSMode mode) {
+        if (currentMode == RTSMode.PATROL && mode != RTSMode.PATROL) {
+            BmtRTSEvents.resetPatrolDragState();
+        }
         currentMode = mode;
     }
 
@@ -30,6 +34,7 @@ public class BmtRTSManager {
     }
 
     public static void exitCamera() {
+        BmtRTSEvents.resetPatrolDragState();
         RTSCameraController controller = RTSCameraController.get();
         if (controller.isActive()) {
             lastCameraStyle = controller.getCameraStyle();
@@ -46,6 +51,7 @@ public class BmtRTSManager {
     }
 
     public static void reset() {
+        BmtRTSEvents.resetPatrolDragState();
         currentMode = RTSMode.CONTROL;
         lastCameraStyle = DEFAULT_CAMERA_STYLE;
     }

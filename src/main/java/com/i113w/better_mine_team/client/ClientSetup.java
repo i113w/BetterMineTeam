@@ -5,6 +5,8 @@ import com.i113w.better_mine_team.client.gui.screen.EntityDetailsScreen;
 import com.i113w.better_mine_team.client.manager.ClientSelectionManager;
 import com.i113w.better_mine_team.client.rts.BmtRTSDelegate;
 import com.i113w.better_mine_team.client.rts.BmtRTSManager;
+import com.i113w.better_mine_team.client.rts.ClientPatrolManager;
+import com.i113w.better_mine_team.client.rts.ClientPatrolSettings;
 import com.i113w.better_mine_team.common.registry.ModMenuTypes;
 import com.i113w.camera_lib.api.CameraLibAPI;
 import com.i113w.camera_lib.camera.RTSCameraController;
@@ -32,5 +34,7 @@ public class ClientSetup {
         ClientSelectionManager.syncToLib();
         RTSCameraController.get().reset();
         BmtRTSManager.reset();
+        ClientPatrolManager.clear();
+        ClientPatrolSettings.reset();
     }
 }

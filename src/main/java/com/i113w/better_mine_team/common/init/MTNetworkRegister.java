@@ -3,8 +3,11 @@ package com.i113w.better_mine_team.common.init;
 import com.i113w.better_mine_team.common.network.*;
 import com.i113w.better_mine_team.common.network.handler.ServerPacketHandler;
 import com.i113w.better_mine_team.common.network.rts.C2S_IssueCommandPayload;
+import com.i113w.better_mine_team.common.network.rts.C2S_PatrolCommandPayload;
 import com.i113w.better_mine_team.common.network.rts.C2S_SelectionSyncPayload;
 import com.i113w.better_mine_team.common.network.rts.S2C_CommandAckPayload;
+import com.i113w.better_mine_team.common.network.rts.S2C_PatrolSettingsPayload;
+import com.i113w.better_mine_team.common.network.rts.S2C_PatrolSyncPayload;
 import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
@@ -68,11 +71,29 @@ public class MTNetworkRegister {
                 ServerPacketHandler::handleIssueCommand
         );
 
+        registrar.playToServer(
+                C2S_PatrolCommandPayload.TYPE,
+                C2S_PatrolCommandPayload.STREAM_CODEC,
+                ServerPacketHandler::handlePatrolCommand
+        );
+
         // 3. 服务端 -> 客户端：指令反馈 (注意使用 RegistryFriendlyByteBuf 兼容的 Codec)
         registrar.playToClient(
                 S2C_CommandAckPayload.TYPE,
                 S2C_CommandAckPayload.STREAM_CODEC,
                 S2C_CommandAckPayload::clientHandle
+        );
+
+        registrar.playToClient(
+                S2C_PatrolSyncPayload.TYPE,
+                S2C_PatrolSyncPayload.STREAM_CODEC,
+                S2C_PatrolSyncPayload::clientHandle
+        );
+
+        registrar.playToClient(
+                S2C_PatrolSettingsPayload.TYPE,
+                S2C_PatrolSettingsPayload.STREAM_CODEC,
+                S2C_PatrolSettingsPayload::clientHandle
         );
 
         registrar.playToClient(

@@ -13,6 +13,7 @@ public class RTSUnitData implements ValueIOSerializable {
     private Vec3 anchorPos = Vec3.ZERO; // [新增] 锚点，用于 HOLD 模式下的回防
     private int targetEntityId = -1;
     private boolean isRtsControlled = false; // 是否已被纳入 RTS 控制体系
+    private PatrolTask patrolTask = PatrolTask.disabled();
 
     // === Setters ===
     public void setMoveCommand(Vec3 pos) {
@@ -34,12 +35,21 @@ public class RTSUnitData implements ValueIOSerializable {
 
     public void setControlled(boolean val) { this.isRtsControlled = val; }
 
+    public void setPatrolTask(PatrolTask task) {
+        this.patrolTask = task == null ? PatrolTask.disabled() : task;
+    }
+
+    public void clearPatrolTask() {
+        this.patrolTask = PatrolTask.disabled();
+    }
+
     // === Getters ===
     public CommandType getCommand() { return currentCommand; }
     public Vec3 getTargetPos() { return targetPos; }
     public Vec3 getAnchorPos() { return anchorPos; }
     public int getTargetEntityId() { return targetEntityId; }
     public boolean isControlled() { return isRtsControlled; }
+    public PatrolTask getPatrolTask() { return patrolTask; }
 
     @Override
     public void serialize(ValueOutput output) {
@@ -52,6 +62,7 @@ public class RTSUnitData implements ValueIOSerializable {
         output.putDouble("Az", anchorPos.z);
         output.putInt("TEnt", targetEntityId);
         output.putBoolean("Ctrl", isRtsControlled);
+        patrolTask.save(output.child("Patrol"));
     }
 
     @Override
@@ -65,5 +76,6 @@ public class RTSUnitData implements ValueIOSerializable {
         this.anchorPos = new Vec3(input.getDoubleOr("Ax", 0.0), input.getDoubleOr("Ay", 0.0), input.getDoubleOr("Az", 0.0));
         this.targetEntityId = input.getIntOr("TEnt", -1);
         this.isRtsControlled = input.getBooleanOr("Ctrl", false);
+        this.patrolTask = PatrolTask.load(input.childOrEmpty("Patrol"));
     }
 }

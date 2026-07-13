@@ -114,6 +114,26 @@ public class BMTConfig {
     private static final ModConfigSpec.IntValue followPathFailThreshold;
     private static final ModConfigSpec.DoubleValue rtsMovementSpeed;
 
+    private static final ModConfigSpec.BooleanValue patrolEnabled;
+    private static final ModConfigSpec.IntValue patrolPointRadius;
+    private static final ModConfigSpec.IntValue patrolMinAreaSize;
+    private static final ModConfigSpec.IntValue patrolMaxAreaSize;
+    private static final ModConfigSpec.DoubleValue patrolMaxCommandDistance;
+    private static final ModConfigSpec.DoubleValue patrolMovementSpeed;
+    private static final ModConfigSpec.IntValue patrolWaypointSpacing;
+    private static final ModConfigSpec.IntValue patrolMinimumPointWaypoints;
+    private static final ModConfigSpec.IntValue patrolMaxWaypointCandidates;
+    private static final ModConfigSpec.IntValue patrolSafeScanUp;
+    private static final ModConfigSpec.IntValue patrolSafeScanDown;
+    private static final ModConfigSpec.IntValue patrolPathRetryLimit;
+    private static final ModConfigSpec.IntValue patrolRepathIntervalTicks;
+    private static final ModConfigSpec.DoubleValue patrolArrivalDistance;
+    private static final ModConfigSpec.IntValue patrolRouteRetryDelayTicks;
+    private static final ModConfigSpec.IntValue patrolPathFailureCooldownTicks;
+    private static final ModConfigSpec.IntValue patrolMaxResumeDelayTicks;
+    private static volatile PatrolSettings patrolSettings = PatrolSettings.DEFAULT;
+    private static long patrolSettingsRevision;
+
     private static void traceInit(String stage) {
         System.out.println("[BMTConfig] " + stage);
     }
@@ -327,6 +347,44 @@ public class BMTConfig {
         builder.pop();
         traceInit("ai");
 
+        builder.push("patrol");
+        patrolEnabled = builder.comment("Enable Patrol mode, its Team Management button, commands, and AI tasks.")
+                .define("enabled", true);
+        patrolPointRadius = builder.comment("Radius in blocks used by point Patrol assignments.")
+                .defineInRange("pointRadius", 10, 1, 128);
+        patrolMinAreaSize = builder.comment("Minimum width and depth, in blocks, for an area Patrol assignment.")
+                .defineInRange("minAreaSize", 4, 1, 128);
+        patrolMaxAreaSize = builder.comment("Maximum width and depth, in blocks, for an area Patrol assignment.")
+                .defineInRange("maxAreaSize", 32, 1, 128);
+        patrolMaxCommandDistance = builder.comment("Maximum distance in blocks from a player to a Patrol target or area corner.")
+                .defineInRange("maxCommandDistance", 1024.0D, 16.0D, 4096.0D);
+        patrolMovementSpeed = builder.comment("Movement speed multiplier used by patrolling mobs.")
+                .defineInRange("movementSpeed", 1.0D, 0.1D, 3.0D);
+        patrolWaypointSpacing = builder.comment("Spacing in blocks between generated perimeter waypoints.")
+                .defineInRange("waypointSpacing", 3, 1, 32);
+        patrolMinimumPointWaypoints = builder.comment("Minimum waypoint count for circular point Patrol routes.")
+                .defineInRange("minimumPointWaypoints", 8, 4, 64);
+        patrolMaxWaypointCandidates = builder.comment("Maximum perimeter candidates tested when looking for a reachable waypoint.")
+                .defineInRange("maxWaypointCandidates", 64, 1, 128);
+        patrolSafeScanUp = builder.comment("Blocks scanned upward when looking for a safe Patrol standing position.")
+                .defineInRange("safeScanUp", 4, 0, 32);
+        patrolSafeScanDown = builder.comment("Blocks scanned downward when looking for a safe Patrol standing position.")
+                .defineInRange("safeScanDown", 8, 0, 64);
+        patrolPathRetryLimit = builder.comment("Failed path attempts allowed before applying the Patrol failure cooldown.")
+                .defineInRange("pathRetryLimit", 3, 0, 20);
+        patrolRepathIntervalTicks = builder.comment("Ticks between Patrol path recalculations.")
+                .defineInRange("repathIntervalTicks", 20, 1, 200);
+        patrolArrivalDistance = builder.comment("Distance in blocks at which a Patrol waypoint is considered reached.")
+                .defineInRange("arrivalDistance", 1.0D, 0.1D, 8.0D);
+        patrolRouteRetryDelayTicks = builder.comment("Delay before retrying when no reachable Patrol route is available.")
+                .defineInRange("routeRetryDelayTicks", 60, 1, 1200);
+        patrolPathFailureCooldownTicks = builder.comment("Cooldown after Patrol path failures exceed pathRetryLimit.")
+                .defineInRange("pathFailureCooldownTicks", 40, 1, 1200);
+        patrolMaxResumeDelayTicks = builder.comment("Maximum remaining Patrol wait retained after combat or another interruption.")
+                .defineInRange("maxResumeDelayTicks", 20, 0, 200);
+        builder.pop();
+        traceInit("patrol");
+
         builder.push("dragon");
         enableDragonTaming = builder.comment("Enable taming the Ender Dragon.").define("enableDragonTaming", true);
         enableDragonRiding = builder.comment("Enable riding the Ender Dragon after taming.").define("enableDragonRiding", true);
@@ -442,6 +500,27 @@ public class BMTConfig {
         GoalSanitizer.loadProtectedClasses();
     }
 
+    public static void bakePatrolSettings() {
+        int rawMinAreaSize = patrolMinAreaSize.get();
+        int rawMaxAreaSize = patrolMaxAreaSize.get();
+        int effectiveMinAreaSize = Math.min(rawMinAreaSize, rawMaxAreaSize);
+        int effectiveMaxAreaSize = Math.max(rawMinAreaSize, rawMaxAreaSize);
+        if (rawMinAreaSize > rawMaxAreaSize) {
+            BetterMineTeam.LOGGER.warn(
+                    "Patrol minAreaSize ({}) is greater than maxAreaSize ({}); using {}..{}",
+                    rawMinAreaSize, rawMaxAreaSize, effectiveMinAreaSize, effectiveMaxAreaSize);
+        }
+
+        patrolSettings = new PatrolSettings(
+                patrolEnabled.get(), patrolPointRadius.get(), effectiveMinAreaSize, effectiveMaxAreaSize,
+                patrolMaxCommandDistance.get(), patrolMovementSpeed.get(), patrolWaypointSpacing.get(),
+                patrolMinimumPointWaypoints.get(), patrolMaxWaypointCandidates.get(), patrolSafeScanUp.get(),
+                patrolSafeScanDown.get(), patrolPathRetryLimit.get(), patrolRepathIntervalTicks.get(),
+                patrolArrivalDistance.get(), patrolRouteRetryDelayTicks.get(),
+                patrolPathFailureCooldownTicks.get(), patrolMaxResumeDelayTicks.get(), ++patrolSettingsRevision
+        );
+    }
+
     private static void loadTamingRules() {
         blacklistedCache.clear();
         blacklistedNamespaces.clear();
@@ -509,6 +588,7 @@ public class BMTConfig {
     public static int getTeamHateMemoryDuration() { return teamHateMemoryDuration.get(); }
     public static boolean isDebugEnabled() { return enableDebugLogging.get(); }
     public static double getRtsMovementSpeed() { return rtsMovementSpeed.get(); }
+    public static PatrolSettings getPatrolSettings() { return patrolSettings; }
     public static boolean isAutoAssignCaptainEnabled() { return autoAssignCaptain.get(); }
     public static boolean isPersonalTeamsEnabled() { return enablePersonalTeams.get(); }
     public static boolean isAutoJoinPersonalTeamOnLogin() { return autoJoinPersonalTeamOnLogin.get(); }

@@ -5,6 +5,7 @@ import com.i113w.better_mine_team.client.gui.ClientTeamUiState;
 import com.i113w.better_mine_team.client.gui.component.TeamMemberEntry;
 import com.i113w.better_mine_team.client.gui.component.TeamMemberList;
 import com.i113w.better_mine_team.client.rts.BmtRTSManager;
+import com.i113w.better_mine_team.client.rts.ClientPatrolSettings;
 import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.network.TeamManagementPayload;
 import com.i113w.better_mine_team.common.team.TeamManager;
@@ -83,6 +84,17 @@ public class TeamManagementScreen extends Screen {
                     .bounds(btnX, btnY, 60, btnHeight)
                     .build());
             btnY += btnHeight + spacing;
+
+            if (ClientPatrolSettings.get().enabled()) {
+                this.addRenderableWidget(Button.builder(Component.translatable("better_mine_team.gui.btn.patrol"), button -> {
+                            this.onClose();
+                            BmtRTSManager.setMode(BmtRTSManager.RTSMode.PATROL);
+                            BmtRTSManager.enterCameraWithLastStyle();
+                        })
+                        .bounds(btnX, btnY, 60, btnHeight)
+                        .build());
+                btnY += btnHeight + spacing;
+            }
 
             // 2. Recruit 按钮 (仅限 TeamsLord)
             if (this.minecraft.player != null && TeamPermissions.hasOverridePermission(this.minecraft.player)) {
