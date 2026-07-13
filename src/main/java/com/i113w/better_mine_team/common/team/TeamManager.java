@@ -2,6 +2,7 @@ package com.i113w.better_mine_team.common.team;
 
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.config.BMTConfig;
+import com.i113w.better_mine_team.common.rts.ai.PatrolCombatBoundary;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -180,6 +181,11 @@ public class TeamManager {
 
             // 跨世界检查
             if (target.level() != seeker.level()) {
+                continue;
+            }
+
+            if (seeker instanceof net.minecraft.world.entity.Mob mob
+                    && !PatrolCombatBoundary.canEngage(mob, target)) {
                 continue;
             }
 

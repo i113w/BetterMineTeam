@@ -41,6 +41,9 @@ public record S2C_PatrolSettingsPayload(PatrolSettings settings) implements Cust
         ByteBufCodecs.VAR_INT.encode(buf, settings.routeRetryDelayTicks());
         ByteBufCodecs.VAR_INT.encode(buf, settings.pathFailureCooldownTicks());
         ByteBufCodecs.VAR_INT.encode(buf, settings.maxResumeDelayTicks());
+        ByteBufCodecs.DOUBLE.encode(buf, settings.combatLeashMinPadding());
+        ByteBufCodecs.DOUBLE.encode(buf, settings.combatLeashScale());
+        ByteBufCodecs.VAR_INT.encode(buf, settings.combatLeashCheckIntervalTicks());
         ByteBufCodecs.VAR_LONG.encode(buf, settings.revision());
     }
 
@@ -55,6 +58,8 @@ public record S2C_PatrolSettingsPayload(PatrolSettings settings) implements Cust
                 ByteBufCodecs.VAR_INT.decode(buf), ByteBufCodecs.VAR_INT.decode(buf),
                 ByteBufCodecs.DOUBLE.decode(buf), ByteBufCodecs.VAR_INT.decode(buf),
                 ByteBufCodecs.VAR_INT.decode(buf), ByteBufCodecs.VAR_INT.decode(buf),
+                ByteBufCodecs.DOUBLE.decode(buf), ByteBufCodecs.DOUBLE.decode(buf),
+                ByteBufCodecs.VAR_INT.decode(buf),
                 ByteBufCodecs.VAR_LONG.decode(buf)
         );
     }

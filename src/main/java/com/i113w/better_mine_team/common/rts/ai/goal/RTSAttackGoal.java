@@ -5,6 +5,7 @@ import com.i113w.better_mine_team.common.entity.goal.TeamGoal;
 import com.i113w.better_mine_team.common.registry.ModAttachments;
 import com.i113w.better_mine_team.common.network.data.CommandType;
 import com.i113w.better_mine_team.common.rts.data.RTSUnitData;
+import com.i113w.better_mine_team.common.rts.ai.PatrolCombatBoundary;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -58,6 +59,14 @@ public class RTSAttackGoal extends Goal implements TeamGoal {
         int cmdTargetId = data.getTargetEntityId();
         Entity cmdTarget = mob.level().getEntity(cmdTargetId);
 
+        if (cmdTarget instanceof LivingEntity livingTarget && livingTarget.isAlive()
+                && !PatrolCombatBoundary.canEngage(mob, livingTarget)) {
+            data.stop();
+            mob.setTarget(null);
+            mob.getNavigation().stop();
+            return;
+        }
+
         boolean cmdTargetValid = isValidTarget(cmdTarget);
 
         if (cmdTargetValid) {
@@ -89,7 +98,8 @@ public class RTSAttackGoal extends Goal implements TeamGoal {
     }
 
     private boolean isValidTarget(Entity entity) {
-        return entity instanceof LivingEntity living && living.isAlive();
+        return entity instanceof LivingEntity living && living.isAlive()
+                && PatrolCombatBoundary.canEngage(mob, living);
     }
 
     @Override

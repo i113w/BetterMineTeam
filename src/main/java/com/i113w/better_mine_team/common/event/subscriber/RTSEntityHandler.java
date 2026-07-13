@@ -4,6 +4,7 @@ import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.registry.ModAttachments;
 import com.i113w.better_mine_team.common.rts.ai.goal.PatrolGoal;
+import com.i113w.better_mine_team.common.rts.ai.goal.PatrolCombatLeashGoal;
 import com.i113w.better_mine_team.common.rts.ai.goal.RTSAttackGoal;
 import com.i113w.better_mine_team.common.rts.ai.goal.RTSMoveGoal;
 import com.i113w.better_mine_team.common.rts.data.RTSUnitData;
@@ -46,6 +47,12 @@ public class RTSEntityHandler {
                 .anyMatch(wrapper -> wrapper.getGoal() instanceof PatrolGoal);
         if (!hasPatrol) {
             mob.goalSelector.addGoal(1, new PatrolGoal(mob));
+        }
+
+        boolean hasPatrolLeash = mob.goalSelector.getAvailableGoals().stream()
+                .anyMatch(wrapper -> wrapper.getGoal() instanceof PatrolCombatLeashGoal);
+        if (!hasPatrolLeash) {
+            mob.goalSelector.addGoal(0, new PatrolCombatLeashGoal(mob));
         }
 
 
