@@ -8,6 +8,7 @@ import com.i113w.better_mine_team.common.entity.goal.AggressiveScanGoal;
 import com.i113w.better_mine_team.common.entity.goal.GoalSanitizer;
 import com.i113w.better_mine_team.common.entity.goal.TeamFollowCaptainGoal;
 import com.i113w.better_mine_team.common.entity.goal.TeamHurtByTargetGoal;
+import com.i113w.better_mine_team.common.rts.ai.goal.PatrolGoal;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import com.i113w.better_mine_team.common.team.TeamPermissions;
 import net.minecraft.ChatFormatting;
@@ -33,6 +34,7 @@ import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraft.world.entity.OwnableEntity;
+import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.TraceableEntity;
 import net.minecraft.world.entity.monster.Vex;
 import net.minecraft.world.scores.Scoreboard;
@@ -62,7 +64,16 @@ public class MobTeamEventSubscriber {
                     BMTConfig.getGuardFollowStopDist()));
         }
 
-        if (mob instanceof net.minecraft.world.entity.PathfinderMob pathfinderMob) {
+        if (mob instanceof PathfinderMob pathfinderMob) {
+            boolean hasPatrol = pathfinderMob.goalSelector.getAvailableGoals().stream()
+                    .anyMatch(w -> w.getGoal() instanceof PatrolGoal);
+            if (!hasPatrol) {
+                pathfinderMob.goalSelector.addGoal(1,
+                        new PatrolGoal(pathfinderMob));
+            }
+        }
+
+        if (mob instanceof PathfinderMob pathfinderMob) {
             boolean hasAggressive = pathfinderMob.targetSelector.getAvailableGoals().stream()
                     .anyMatch(w -> w.getGoal() instanceof AggressiveScanGoal);
             if (!hasAggressive) {

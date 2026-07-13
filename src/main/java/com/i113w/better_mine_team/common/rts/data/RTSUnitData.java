@@ -20,6 +20,7 @@ public class RTSUnitData {
     private Vec3 anchorPos = Vec3.ZERO;
     private int targetEntityId = -1;
     private boolean isRtsControlled = false;
+    private PatrolTask patrolTask = PatrolTask.disabled();
 
     private RTSUnitData(Entity entity) {
         this.entity = entity;
@@ -61,6 +62,16 @@ public class RTSUnitData {
         save();
     }
 
+    public void setPatrolTask(PatrolTask task) {
+        this.patrolTask = task == null ? PatrolTask.disabled() : task;
+        save();
+    }
+
+    public void clearPatrolTask() {
+        this.patrolTask = PatrolTask.disabled();
+        save();
+    }
+
     // ===== Getters =====
 
     public CommandType getCommand() { return currentCommand; }
@@ -68,6 +79,7 @@ public class RTSUnitData {
     public Vec3 getAnchorPos() { return anchorPos; }
     public int getTargetEntityId() { return targetEntityId; }
     public boolean isControlled() { return isRtsControlled; }
+    public PatrolTask getPatrolTask() { return patrolTask; }
 
     // ===== NBT =====
 
@@ -86,6 +98,7 @@ public class RTSUnitData {
         tag.putDouble("Az", anchorPos.z);
         tag.putInt("TEnt", targetEntityId);
         tag.putBoolean("Ctrl", isRtsControlled);
+        tag.put("Patrol", patrolTask.save());
         return tag;
     }
 
@@ -99,5 +112,8 @@ public class RTSUnitData {
         this.anchorPos = new Vec3(tag.getDouble("Ax"), tag.getDouble("Ay"), tag.getDouble("Az"));
         this.targetEntityId = tag.getInt("TEnt");
         this.isRtsControlled = tag.getBoolean("Ctrl");
+        this.patrolTask = tag.contains("Patrol")
+                ? PatrolTask.load(tag.getCompound("Patrol"))
+                : PatrolTask.disabled();
     }
 }

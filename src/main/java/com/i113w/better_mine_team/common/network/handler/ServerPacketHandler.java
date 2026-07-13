@@ -2,22 +2,31 @@ package com.i113w.better_mine_team.common.network.handler;
 
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.config.BMTConfig;
+import com.i113w.better_mine_team.common.config.PatrolSettings;
 import com.i113w.better_mine_team.common.event.subscriber.MobTeamEventSubscriber;
 import com.i113w.better_mine_team.common.init.MTNetworkRegister;
 import com.i113w.better_mine_team.common.network.rts.C2S_IssueCommandPacket;
+import com.i113w.better_mine_team.common.network.rts.C2S_PatrolCommandPacket;
 import com.i113w.better_mine_team.common.network.rts.C2S_SelectionSyncPacket;
 import com.i113w.better_mine_team.common.network.rts.S2C_CommandAckPacket;
+import com.i113w.better_mine_team.common.network.rts.S2C_PatrolSyncPacket;
+import com.i113w.better_mine_team.common.network.data.PatrolAction;
 import com.i113w.better_mine_team.common.network.data.CommandType;
+import com.i113w.better_mine_team.common.rts.ai.PatrolTargeting;
 import com.i113w.better_mine_team.common.rts.ai.RTSUnitAIController;
+import com.i113w.better_mine_team.common.rts.data.PatrolTask;
 import com.i113w.better_mine_team.common.rts.data.RTSPlayerData;
+import com.i113w.better_mine_team.common.rts.data.RTSUnitData;
 import com.i113w.better_mine_team.common.team.TeamManager;
 import com.i113w.better_mine_team.common.team.TeamPermissions;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
@@ -28,6 +37,8 @@ import net.minecraftforge.network.PacketDistributor;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -116,6 +127,53 @@ public class ServerPacketHandler {
 
             sendAck(player, true, successCount,
                     Component.translatable("better_mine_team.msg.cmd_ack", successCount).withStyle(ChatFormatting.GREEN));
+        });
+        ctx.setPacketHandled(true);
+    }
+
+    public static void handlePatrolCommand(C2S_PatrolCommandPacket msg, Supplier<NetworkEvent.Context> ctxSupplier) {
+        NetworkEvent.Context ctx = ctxSupplier.get();
+        ctx.enqueueWork(() -> {
+            ServerPlayer player = ctx.getSender();
+            if (player == null) return;
+
+            PatrolSettings settings = BMTConfig.getPatrolSettings();
+            if (!settings.enabled()) {
+                sendAck(player, false, 0, Component.translatable("better_mine_team.msg.patrol_disabled")
+                        .withStyle(ChatFormatting.RED));
+                return;
+            }
+
+            Level level = player.level();
+            if (!level.dimension().location().toString().equals(msg.getDimensionId())) {
+                sendAck(player, false, 0, Component.translatable("better_mine_team.msg.patrol_wrong_dimension")
+                        .withStyle(ChatFormatting.RED));
+                return;
+            }
+
+            PlayerTeam playerTeam = TeamManager.getTeam(player);
+            List<PathfinderMob> validUnits = getValidPatrolUnits(player, playerTeam, msg.getEntityIds());
+            if (validUnits.isEmpty()) {
+                sendAck(player, false, 0, Component.translatable("better_mine_team.msg.patrol_no_units")
+                        .withStyle(ChatFormatting.RED));
+                return;
+            }
+
+            if (msg.getAction() == PatrolAction.CANCEL) {
+                int cancelled = executePatrolCancel(validUnits);
+                sendAck(player, cancelled > 0, cancelled, cancelled > 0
+                        ? Component.translatable("better_mine_team.msg.patrol_cancelled", cancelled)
+                                .withStyle(ChatFormatting.GREEN)
+                        : Component.translatable("better_mine_team.msg.patrol_no_units")
+                                .withStyle(ChatFormatting.RED));
+                return;
+            }
+
+            if (msg.getAction() == PatrolAction.ASSIGN_AREA) {
+                executePatrolArea(player, playerTeam, validUnits, msg, settings);
+            } else {
+                executePatrolPoint(player, playerTeam, validUnits, msg, settings);
+            }
         });
         ctx.setPacketHandled(true);
     }
@@ -237,6 +295,138 @@ public class ServerPacketHandler {
         } else {
             player.displayClientMessage(Component.translatable("better_mine_team.msg.recruit_fail_no_target").withStyle(ChatFormatting.YELLOW), true);
         }
+    }
+
+    private static void executePatrolPoint(ServerPlayer player, PlayerTeam playerTeam,
+                                           List<PathfinderMob> units, C2S_PatrolCommandPacket msg,
+                                           PatrolSettings settings) {
+        Level level = player.level();
+        BlockPos center = msg.getCenter();
+        if (!level.isLoaded(center)) {
+            sendAck(player, false, 0, Component.translatable("better_mine_team.msg.patrol_unreachable")
+                    .withStyle(ChatFormatting.RED));
+            return;
+        }
+        if (!isWithinPatrolCommandDistance(player, settings, center)) {
+            sendAck(player, false, 0, Component.translatable("better_mine_team.msg.patrol_too_far")
+                    .withStyle(ChatFormatting.RED));
+            return;
+        }
+
+        int radius = settings.pointRadius();
+        String dimension = level.dimension().location().toString();
+        String teamName = getTeamName(playerTeam);
+        PatrolTask probe = PatrolTask.point(player.getUUID(), teamName, dimension, center, radius, center);
+        List<BlockPos> route = PatrolTargeting.createPerimeterRoute(probe, settings);
+        int assigned = 0;
+        for (PathfinderMob unit : units) {
+            int nearestIndex = PatrolTargeting.findNearestPerimeterIndex(route, unit.blockPosition());
+            int direction = unit.getRandom().nextBoolean() ? 1 : -1;
+            Optional<PatrolTargeting.PerimeterTarget> initial = PatrolTargeting.findReachablePerimeterTarget(
+                    unit, route, nearestIndex, direction, settings);
+            if (initial.isEmpty()) continue;
+            RTSUnitData.get(unit).setPatrolTask(PatrolTask.point(player.getUUID(), teamName, dimension,
+                    center, radius, initial.get().position()));
+            syncPatrol(unit);
+            assigned++;
+        }
+        sendPatrolAssignAck(player, assigned, units.size());
+    }
+
+    private static void executePatrolArea(ServerPlayer player, PlayerTeam playerTeam,
+                                          List<PathfinderMob> units, C2S_PatrolCommandPacket msg,
+                                          PatrolSettings settings) {
+        Level level = player.level();
+        BlockPos rawMin = PatrolTargeting.normalizedMin(msg.getMinCorner(), msg.getMaxCorner());
+        BlockPos rawMax = PatrolTargeting.normalizedMax(msg.getMinCorner(), msg.getMaxCorner());
+        int centerY = msg.getMinCorner().getY();
+        BlockPos min = new BlockPos(rawMin.getX(), centerY, rawMin.getZ());
+        BlockPos max = new BlockPos(rawMax.getX(), centerY, rawMax.getZ());
+        BlockPos minMaxCorner = new BlockPos(min.getX(), centerY, max.getZ());
+        BlockPos maxMinCorner = new BlockPos(max.getX(), centerY, min.getZ());
+        if (msg.getMinCorner().getY() != msg.getMaxCorner().getY()
+                || !PatrolTargeting.isAreaSizeValid(min, max, settings)
+                || !PatrolTargeting.isAreaLoaded(level, min, max)
+                || !isWithinPatrolCommandDistance(player, settings, min, max, minMaxCorner, maxMinCorner)) {
+            sendAck(player, false, 0, Component.translatable("better_mine_team.msg.patrol_invalid_area",
+                            PatrolTargeting.areaWidth(min, max), PatrolTargeting.areaDepth(min, max),
+                            settings.minAreaSize(), settings.maxAreaSize())
+                    .withStyle(ChatFormatting.RED));
+            return;
+        }
+
+        BlockPos center = new BlockPos((min.getX() + max.getX()) / 2, centerY, (min.getZ() + max.getZ()) / 2);
+        String dimension = level.dimension().location().toString();
+        String teamName = getTeamName(playerTeam);
+        PatrolTask probe = PatrolTask.area(player.getUUID(), teamName, dimension, center, min, max, center);
+        List<BlockPos> route = PatrolTargeting.createPerimeterRoute(probe, settings);
+        int assigned = 0;
+        for (PathfinderMob unit : units) {
+            int nearestIndex = PatrolTargeting.findNearestPerimeterIndex(route, unit.blockPosition());
+            int direction = unit.getRandom().nextBoolean() ? 1 : -1;
+            Optional<PatrolTargeting.PerimeterTarget> initial = PatrolTargeting.findReachablePerimeterTarget(
+                    unit, route, nearestIndex, direction, settings);
+            if (initial.isEmpty()) continue;
+            RTSUnitData.get(unit).setPatrolTask(PatrolTask.area(player.getUUID(), teamName, dimension,
+                    center, min, max, initial.get().position()));
+            syncPatrol(unit);
+            assigned++;
+        }
+        sendPatrolAssignAck(player, assigned, units.size());
+    }
+
+    private static int executePatrolCancel(List<PathfinderMob> units) {
+        int cancelled = 0;
+        for (PathfinderMob unit : units) {
+            RTSUnitData data = RTSUnitData.get(unit);
+            if (!data.getPatrolTask().isEnabled()) continue;
+            data.clearPatrolTask();
+            unit.getNavigation().stop();
+            syncPatrol(unit);
+            cancelled++;
+        }
+        return cancelled;
+    }
+
+    private static List<PathfinderMob> getValidPatrolUnits(ServerPlayer player, PlayerTeam playerTeam,
+                                                            List<Integer> entityIds) {
+        List<PathfinderMob> units = new ArrayList<>();
+        for (int id : new LinkedHashSet<>(entityIds)) {
+            Entity entity = player.level().getEntity(id);
+            if (entity instanceof PathfinderMob mob && mob.isAlive()
+                    && isValidController(player, playerTeam, mob, CommandType.MOVE)) {
+                units.add(mob);
+            }
+        }
+        return units;
+    }
+
+    private static void sendPatrolAssignAck(ServerPlayer player, int assigned, int requested) {
+        if (assigned <= 0) {
+            sendAck(player, false, 0, Component.translatable("better_mine_team.msg.patrol_unreachable")
+                    .withStyle(ChatFormatting.RED));
+            return;
+        }
+        String key = assigned < requested ? "better_mine_team.msg.patrol_partial" : "better_mine_team.msg.patrol_assigned";
+        sendAck(player, true, assigned, Component.translatable(key, assigned)
+                .withStyle(assigned < requested ? ChatFormatting.YELLOW : ChatFormatting.GREEN));
+    }
+
+    public static void syncPatrol(Mob mob) {
+        MTNetworkRegister.CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> mob),
+                S2C_PatrolSyncPacket.fromTask(mob.getId(), RTSUnitData.get(mob).getPatrolTask()));
+    }
+
+    private static String getTeamName(PlayerTeam team) {
+        return team == null ? "" : team.getName();
+    }
+
+    private static boolean isWithinPatrolCommandDistance(ServerPlayer player, PatrolSettings settings,
+                                                          BlockPos... positions) {
+        for (BlockPos pos : positions) {
+            if (player.distanceToSqr(Vec3.atCenterOf(pos)) > settings.maxCommandDistanceSqr()) return false;
+        }
+        return true;
     }
 
     private static boolean isValidController(ServerPlayer player, PlayerTeam playerTeam, Mob mob, CommandType commandType) {

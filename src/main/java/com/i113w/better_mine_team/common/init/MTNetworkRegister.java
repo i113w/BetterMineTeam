@@ -4,8 +4,11 @@ import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.network.*;
 import com.i113w.better_mine_team.common.network.handler.ServerPacketHandler;
 import com.i113w.better_mine_team.common.network.rts.C2S_IssueCommandPacket;
+import com.i113w.better_mine_team.common.network.rts.C2S_PatrolCommandPacket;
 import com.i113w.better_mine_team.common.network.rts.C2S_SelectionSyncPacket;
 import com.i113w.better_mine_team.common.network.rts.S2C_CommandAckPacket;
+import com.i113w.better_mine_team.common.network.rts.S2C_PatrolSyncPacket;
+import com.i113w.better_mine_team.common.network.rts.S2C_PatrolSettingsPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkRegistry;
@@ -15,7 +18,7 @@ import java.util.Optional;
 
 public class MTNetworkRegister {
 
-    private static final String PROTOCOL_VERSION = "4";
+    private static final String PROTOCOL_VERSION = "6";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(BetterMineTeam.MODID, "main"),
@@ -116,6 +119,30 @@ public class MTNetworkRegister {
                 S2C_PersonalTeamStatePacket::encode,
                 S2C_PersonalTeamStatePacket::decode,
                 S2C_PersonalTeamStatePacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT)
+        );
+
+        CHANNEL.registerMessage(id++,
+                C2S_PatrolCommandPacket.class,
+                C2S_PatrolCommandPacket::encode,
+                C2S_PatrolCommandPacket::decode,
+                ServerPacketHandler::handlePatrolCommand,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER)
+        );
+
+        CHANNEL.registerMessage(id++,
+                S2C_PatrolSyncPacket.class,
+                S2C_PatrolSyncPacket::encode,
+                S2C_PatrolSyncPacket::decode,
+                S2C_PatrolSyncPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT)
+        );
+
+        CHANNEL.registerMessage(id++,
+                S2C_PatrolSettingsPacket.class,
+                S2C_PatrolSettingsPacket::encode,
+                S2C_PatrolSettingsPacket::decode,
+                S2C_PatrolSettingsPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_CLIENT)
         );
     }

@@ -6,6 +6,8 @@ import com.i113w.better_mine_team.client.gui.screen.TeamManagementScreen;
 import com.i113w.better_mine_team.client.manager.ClientSelectionManager;
 import com.i113w.better_mine_team.client.rts.BMTInteractionDelegate;
 import com.i113w.better_mine_team.client.rts.ClientRTSStateManager;
+import com.i113w.better_mine_team.client.rts.ClientPatrolManager;
+import com.i113w.better_mine_team.client.rts.ClientPatrolSettings;
 import com.i113w.better_mine_team.common.registry.ModMenuTypes;
 import com.i113w.camera_lib.api.CameraLibAPI;
 import com.i113w.camera_lib.camera.RTSCameraController;
@@ -40,6 +42,8 @@ class ClientForgeEvents {
     public static void onClientLogout(ClientPlayerNetworkEvent.LoggingOut event) {
         ClientSelectionManager.clear();
         ClientRTSStateManager.get().reset(); // 仅重置我们自己维护的状态即可
+        ClientPatrolManager.clear();
+        ClientPatrolSettings.reset();
         // 库会自动清理内部相机和选择状态
     }
 

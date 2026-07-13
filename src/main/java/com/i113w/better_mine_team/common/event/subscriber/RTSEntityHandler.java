@@ -2,6 +2,7 @@ package com.i113w.better_mine_team.common.event.subscriber;
 
 import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.common.config.BMTConfig;
+import com.i113w.better_mine_team.common.rts.ai.goal.PatrolGoal;
 import com.i113w.better_mine_team.common.rts.ai.goal.RTSAttackGoal;
 import com.i113w.better_mine_team.common.rts.ai.goal.RTSMoveGoal;
 import com.i113w.better_mine_team.common.rts.data.RTSUnitData;
@@ -22,21 +23,20 @@ public class RTSEntityHandler {
         if (!(event.getEntity() instanceof PathfinderMob mob)) return;
 
         // 防止重复添加 RTS Goals
-        boolean alreadyHasRTSGoals = mob.goalSelector.getAvailableGoals().stream()
-                .anyMatch(w -> w.getGoal() instanceof RTSMoveGoal || w.getGoal() instanceof RTSAttackGoal);
-
-        if (alreadyHasRTSGoals) {
-            BetterMineTeam.debug("[RTS-HANDLER] Entity {} already has RTS goals, skipping",
-                    mob.getName().getString());
-            return;
-        }
-
         // 触发 lazy init（确保 NBT key 存在）
         RTSUnitData.get(mob);
 
-        // 添加 RTS Goals
-        mob.goalSelector.addGoal(0, new RTSMoveGoal(mob, BMTConfig.getRtsMovementSpeed()));
-        mob.goalSelector.addGoal(1, new RTSAttackGoal(mob));
+        boolean hasMove = mob.goalSelector.getAvailableGoals().stream()
+                .anyMatch(w -> w.getGoal() instanceof RTSMoveGoal);
+        if (!hasMove) mob.goalSelector.addGoal(0, new RTSMoveGoal(mob, BMTConfig.getRtsMovementSpeed()));
+
+        boolean hasAttack = mob.goalSelector.getAvailableGoals().stream()
+                .anyMatch(w -> w.getGoal() instanceof RTSAttackGoal);
+        if (!hasAttack) mob.goalSelector.addGoal(1, new RTSAttackGoal(mob));
+
+        boolean hasPatrol = mob.goalSelector.getAvailableGoals().stream()
+                .anyMatch(w -> w.getGoal() instanceof PatrolGoal);
+        if (!hasPatrol) mob.goalSelector.addGoal(1, new PatrolGoal(mob));
 
         BetterMineTeam.debug("[RTS-HANDLER] RTS Goals added to: {} (Total goals: {})",
                 mob.getName().getString(),

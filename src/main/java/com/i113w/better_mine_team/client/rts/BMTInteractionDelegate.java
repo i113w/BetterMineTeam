@@ -8,6 +8,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.entity.player.Player;
 import org.jetbrains.annotations.Nullable;
 
@@ -19,10 +20,16 @@ public class BMTInteractionDelegate implements IRTSInteractionDelegate {
 
     @Override
     public boolean isSelectable(Entity entity) {
-        return entity instanceof PathfinderMob
-                && entity.isAlive()
-                && entity.getY() >= -64
-                && entity.getY() <= 320;
+        if (!(entity instanceof PathfinderMob mob) || !entity.isAlive()
+                || entity.getY() < -64 || entity.getY() > 320) return false;
+        if (ClientRTSStateManager.get().getMode() == ClientRTSStateManager.RTSMode.PATROL) {
+            if (!ClientPatrolSettings.get().enabled()) return false;
+            Player player = Minecraft.getInstance().player;
+            if (player == null) return false;
+            return TeamManager.isAlly(player, mob)
+                    || entity instanceof TamableAnimal tamable && tamable.isOwnedBy(player);
+        }
+        return true;
     }
 
     public static boolean isEnemyLike(Entity entity) {

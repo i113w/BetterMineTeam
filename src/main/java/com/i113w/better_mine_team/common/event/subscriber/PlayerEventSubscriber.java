@@ -5,6 +5,7 @@ import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.init.MTNetworkRegister;
 import com.i113w.better_mine_team.common.network.S2C_PersonalTeamStatePacket;
 import com.i113w.better_mine_team.common.network.S2C_SyncTeamLordPacket;
+import com.i113w.better_mine_team.common.network.rts.S2C_PatrolSettingsPacket;
 import com.i113w.better_mine_team.common.rts.data.RTSPlayerData;
 import com.i113w.better_mine_team.common.team.TeamDataStorage;
 import com.i113w.better_mine_team.common.team.TeamManager;
@@ -25,6 +26,10 @@ public class PlayerEventSubscriber {
             MTNetworkRegister.CHANNEL.send(
                     PacketDistributor.PLAYER.with(() -> player),
                     new S2C_SyncTeamLordPacket(hasPerm)
+            );
+            MTNetworkRegister.CHANNEL.send(
+                    PacketDistributor.PLAYER.with(() -> player),
+                    S2C_PatrolSettingsPacket.current()
             );
             BetterMineTeam.debug("Synced TeamsLord permission to {}: {}", player.getName().getString(), hasPerm);
             handlePersonalTeamLogin(player);

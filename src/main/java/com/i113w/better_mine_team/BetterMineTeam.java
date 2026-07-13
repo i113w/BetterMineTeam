@@ -2,9 +2,12 @@ package com.i113w.better_mine_team;
 
 import com.i113w.better_mine_team.client.ClientSetup;
 import com.i113w.better_mine_team.common.config.BMTConfig;
+import com.i113w.better_mine_team.common.config.BMTClientConfig;
 import com.i113w.better_mine_team.common.init.MTNetworkRegister;
+import com.i113w.better_mine_team.common.network.rts.S2C_PatrolSettingsPacket;
 import com.i113w.better_mine_team.common.registry.ModEntities;
 import com.i113w.better_mine_team.common.registry.ModMenuTypes;
+import com.i113w.better_mine_team.common.rts.PatrolTaskReconciler;
 import com.mojang.logging.LogUtils;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
@@ -22,6 +25,8 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
 import com.electronwill.nightconfig.core.file.CommentedFileConfig;
 import net.minecraftforge.fml.loading.FMLPaths;
+import net.minecraftforge.network.PacketDistributor;
+import net.minecraftforge.server.ServerLifecycleHooks;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.EntityType;
 
@@ -44,6 +49,7 @@ public class BetterMineTeam {
 
         // 注册配置文件 (Forge 1.20.1 使用 ModLoadingContext)
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, BMTConfig.CONFIG, "better_mine_team.toml");
+        ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, BMTClientConfig.CONFIG, "better_mine_team-client.toml");
 
         // 注册菜单类型
         ModMenuTypes.register(modEventBus);
@@ -145,13 +151,26 @@ public class BetterMineTeam {
     private void onConfigLoad(net.minecraftforge.fml.event.config.ModConfigEvent.Loading event) {
         if (event.getConfig().getSpec() == BMTConfig.CONFIG) {
             BMTConfig.loadTamingMaterials();
+            BMTConfig.bakePatrolSettings();
+        } else if (event.getConfig().getSpec() == BMTClientConfig.CONFIG) {
+            BMTClientConfig.bakePatrolVisualSettings();
         }
     }
 
     private void onConfigReload(net.minecraftforge.fml.event.config.ModConfigEvent.Reloading event) {
         if (event.getConfig().getSpec() == BMTConfig.CONFIG) {
-            LOGGER.info("Config reloaded, refreshing taming materials...");
+            LOGGER.info("Config reloaded, refreshing cached settings...");
             BMTConfig.loadTamingMaterials();
+            BMTConfig.bakePatrolSettings();
+            var server = ServerLifecycleHooks.getCurrentServer();
+            if (server != null) {
+                server.execute(() -> {
+                    MTNetworkRegister.CHANNEL.send(PacketDistributor.ALL.noArg(), S2C_PatrolSettingsPacket.current());
+                    PatrolTaskReconciler.reconcileLoadedTasks(server);
+                });
+            }
+        } else if (event.getConfig().getSpec() == BMTClientConfig.CONFIG) {
+            BMTClientConfig.bakePatrolVisualSettings();
         }
     }
 }

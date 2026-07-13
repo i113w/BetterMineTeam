@@ -5,6 +5,7 @@ import com.i113w.better_mine_team.client.gui.ClientTeamUiState;
 import com.i113w.better_mine_team.client.gui.component.TeamMemberEntry;
 import com.i113w.better_mine_team.client.gui.component.TeamMemberList;
 import com.i113w.better_mine_team.client.rts.ClientRTSStateManager;
+import com.i113w.better_mine_team.client.rts.ClientPatrolSettings;
 import com.i113w.better_mine_team.common.config.BMTConfig;
 import com.i113w.better_mine_team.common.init.MTNetworkRegister;
 import com.i113w.better_mine_team.common.network.TeamManagementPacket;
@@ -80,6 +81,19 @@ public class TeamManagementScreen extends Screen {
                     .bounds(btnX, btnY, 60, btnHeight)
                     .build());
             btnY += btnHeight + spacing;
+
+            if (ClientPatrolSettings.get().enabled()) {
+                this.addRenderableWidget(Button.builder(
+                                Component.translatable("better_mine_team.gui.btn.patrol"),
+                                button -> {
+                                    this.onClose();
+                                    ClientRTSStateManager.get().setMode(ClientRTSStateManager.RTSMode.PATROL);
+                                    ClientRTSStateManager.get().enterCameraWithLastStyle();
+                                })
+                        .bounds(btnX, btnY, 60, btnHeight)
+                        .build());
+                btnY += btnHeight + spacing;
+            }
 
             if (this.minecraft.player != null && TeamPermissions.hasOverridePermission(this.minecraft.player)) {
                 this.addRenderableWidget(Button.builder(
