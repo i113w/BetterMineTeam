@@ -74,5 +74,7 @@
 "better_mine_team.msg.personal_team_select_blocked": "个人队伍已开启,关闭后才能选择公共队伍",
 "better_mine_team.gui.tooltip.personal_team": "个人队伍",
 "better_mine_team.msg.cmd_attack_patrol_blocked": "所选生物均无法在不离开巡逻边界的情况下攻击该目标",
-"better_mine_team.msg.cmd_attack_patrol_partial": "已向 %s/%s 个生物下达攻击指令，其余生物受巡逻边界限制"
+"better_mine_team.msg.cmd_attack_patrol_partial": "已向 %s/%s 个生物下达攻击指令，其余生物受巡逻边界限制",
+"better_mine_team.gui.search_members": "搜索队伍成员...",
+"better_mine_team.gui.search_no_results": "未找到匹配的队伍成员"
 }
