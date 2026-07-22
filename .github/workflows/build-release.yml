@@ -107,10 +107,27 @@ jobs:
                 ;;
             esac
 
-            if [[ ! "$version" =~ ^[0-9A-Za-z][0-9A-Za-z._-]*$ ]]; then
+            # 版本校验：显式支持 -suffix 后缀（如 1.2.3、1.2.3-beta、1.2.3-Alpha、1.2.3-Hotfix、1.2.3-beta-1）
+            # 基础部分由字母/数字/点/下划线组成，后缀由连字符引导，可叠加多段
+            if [[ ! "$version" =~ ^[0-9A-Za-z][0-9A-Za-z._]*(-[0-9A-Za-z._]+)*$ ]]; then
               echo "Invalid version in tag: $version" >&2
+              echo "Expected format: <base>[-<suffix>], e.g. 1.2.3, 1.2.3-beta, 1.2.3-Alpha, 1.2.3-Hotfix" >&2
               exit 1
             fi
+
+            # 检测是否存在版本后缀（用于后续判断是否标记 latest）
+            version_suffix=""
+            if [[ "$version" == *-* ]]; then
+              version_suffix="${version#*-}"
+            fi
+
+            # 带后缀的 Tag（如 -beta、-Alpha、-Hotfix）不以预发布形式发布，
+            # 仍按正式版发布（--prerelease=false 在 release job 中已写死）。
+            # 若希望带后缀的版本不抢占 "latest" 标记，取消下方注释即可：
+            # if [[ -n "$version_suffix" ]]; then
+            #   latest="false"
+            # fi
+
             if [[ -z "$target_branch" ]]; then
               echo "Tag commit $GITHUB_SHA is not contained in the expected release branch." >&2
               exit 1
@@ -231,6 +248,11 @@ jobs:
       GH_TOKEN: ${{ github.token }}
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Download release bundle
         uses: actions/download-artifact@v4
         with:
