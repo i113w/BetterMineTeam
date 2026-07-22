@@ -1,82 +1,154 @@
 package com.i113w.better_mine_team.client.gui.component;
 
-import com.i113w.better_mine_team.BetterMineTeam;
 import com.i113w.better_mine_team.client.gui.asset.MTGuiIcons;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.ObjectSelectionList;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Collection;
+
 public class TeamMemberList extends ObjectSelectionList<TeamMemberEntry> {
 
-    // 1.20.1 中，width 是列表组件的宽度，itemHeight 是条目高度
-    public TeamMemberList(Minecraft mc, int guiLeft, int guiTop) {
+    private static final int ROW_WIDTH = 150;
+    private static final int SCROLLBAR_WIDTH = 12;
+    private static final int MIN_THUMB_HEIGHT = 15;
+
+    private final int guiLeft;
+    private final int listTop;
+    private final int listHeight;
+    private boolean draggingScrollbar;
+
+    public TeamMemberList(Minecraft mc, int guiLeft, int listTop, int listHeight) {
         super(
                 mc,
-                150, // width
-                152, // height
-                guiTop + 7, // top (Y coordinate)
-                guiTop + 7 + 152, // bottom (Y coordinate)
-                TeamMemberEntry.ITEM_HEIGHT // itemHeight
+                ROW_WIDTH,
+                listHeight,
+                listTop,
+                listTop + listHeight,
+                TeamMemberEntry.ITEM_HEIGHT
         );
-        // [关键] 设置列表的左侧起始位置
+        this.guiLeft = guiLeft;
+        this.listTop = listTop;
+        this.listHeight = listHeight;
         this.setLeftPos(guiLeft + 7);
-        // 设置 RenderBackground 为 false，因为我们在 Screen 里画了背景图
         this.setRenderBackground(false);
-        this.setRenderTopAndBottom(false); // 不画默认的黑色背景
+        this.setRenderTopAndBottom(false);
     }
 
     @Override
     public int getRowWidth() {
-        return 150;
+        return ROW_WIDTH;
     }
 
     @Override
     protected int getScrollbarPosition() {
-        return this.getLeft() + this.width - 6;
+        return getScrollbarX();
     }
 
-    // 重写 render，移除 scissor 逻辑，因为 ObjectSelectionList 内部会自动处理 scissor
-    // 如果列表显示不全，说明 super.render 里的逻辑有问题，或者 setLeftPos 没生效
+    @Override
+    public boolean isMouseOver(double mouseX, double mouseY) {
+        boolean overRows = mouseX >= this.getLeft() && mouseX < this.getLeft() + ROW_WIDTH;
+        boolean overScrollbar = mouseX >= getScrollbarX() && mouseX < getScrollbarX() + SCROLLBAR_WIDTH;
+        return (overRows || overScrollbar)
+                && mouseY >= this.listTop
+                && mouseY < this.listTop + this.listHeight;
+    }
+
     @Override
     public void render(@NotNull GuiGraphics gfx, int mouseX, int mouseY, float partialTick) {
-        // 调用父类渲染，父类会调用 renderList，renderList 会调用 Entry.render
         super.render(gfx, mouseX, mouseY, partialTick);
-
-        // 渲染自定义滚动条
         renderCustomScrollbar(gfx);
     }
 
     private void renderCustomScrollbar(GuiGraphics gfx) {
-        int maxScroll = this.getMaxScroll();
-        if (maxScroll <= 0) return;
-
-        // 重新计算滚动条位置，基于列表的绝对位置
-        int scrollbarX = this.getLeft() + this.width + 1; // 微调位置
-        int scrollbarY = this.getTop();
-        int scrollbarHeight = this.getHeight();
+        if (!hasScrollableContent()) {
+            this.draggingScrollbar = false;
+            return;
+        }
 
         RenderSystem.enableBlend();
-
-        MTGuiIcons.SCROLL_TRACK.render(gfx, scrollbarX, scrollbarY);
-
-        int totalContentHeight = this.getItemCount() * TeamMemberEntry.ITEM_HEIGHT;
-
-        // 防止除以零
-        if (totalContentHeight == 0) totalContentHeight = 1;
-
-        int thumbHeight = (int) ((float) (scrollbarHeight * scrollbarHeight) / totalContentHeight);
-        thumbHeight = Mth.clamp(thumbHeight, 15, scrollbarHeight);
-
-        double scrollRatio = this.getScrollAmount() / (double) maxScroll;
-        int thumbY = (int) (scrollRatio * (scrollbarHeight - thumbHeight)) + scrollbarY;
-
-        MTGuiIcons.SCROLL_THUMB.render(gfx, scrollbarX, thumbY, thumbHeight);
-
+        MTGuiIcons.SCROLL_TRACK.render(gfx, getScrollbarX(), this.listTop, this.listHeight);
+        MTGuiIcons.SCROLL_THUMB.render(gfx, getScrollbarX(), getThumbY(), getThumbHeight());
         RenderSystem.disableBlend();
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0 && isOverScrollbar(mouseX, mouseY)) {
+            if (isOverThumb(mouseX, mouseY)) {
+                this.draggingScrollbar = true;
+                return true;
+            }
+            return false;
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (button == 0 && this.draggingScrollbar) {
+            int travel = this.listHeight - getThumbHeight();
+            if (travel > 0) {
+                double scrollScale = (double) this.getMaxScroll() / travel;
+                this.setScrollAmount(this.getScrollAmount() + dragY * scrollScale);
+            }
+            return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        this.draggingScrollbar = false;
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    private int getScrollbarX() {
+        return this.guiLeft + 157;
+    }
+
+    private int getThumbHeight() {
+        int totalContentHeight = Math.max(1, this.getItemCount() * TeamMemberEntry.ITEM_HEIGHT);
+        int calculatedHeight = (int) ((float) (this.listHeight * this.listHeight) / totalContentHeight);
+        return Mth.clamp(calculatedHeight, MIN_THUMB_HEIGHT, this.listHeight);
+    }
+
+    private int getThumbY() {
+        int maxScroll = this.getMaxScroll();
+        if (maxScroll <= 0) return this.listTop;
+        double scrollRatio = this.getScrollAmount() / maxScroll;
+        return this.listTop + (int) Math.round(scrollRatio * (this.listHeight - getThumbHeight()));
+    }
+
+    private boolean isOverScrollbar(double mouseX, double mouseY) {
+        return hasScrollableContent()
+                && mouseX >= getScrollbarX()
+                && mouseX < getScrollbarX() + SCROLLBAR_WIDTH
+                && mouseY >= this.listTop
+                && mouseY < this.listTop + this.listHeight;
+    }
+
+    private boolean isOverThumb(double mouseX, double mouseY) {
+        int thumbY = getThumbY();
+        return isOverScrollbar(mouseX, mouseY)
+                && mouseY >= thumbY
+                && mouseY < thumbY + getThumbHeight();
+    }
+
+    public void stopScrollbarDrag() {
+        this.draggingScrollbar = false;
+    }
+
+    private boolean hasScrollableContent() {
+        return this.getMaxScroll() > 0 && getThumbHeight() < this.listHeight;
+    }
+
+    @Override
+    public void setScrollAmount(double scrollAmount) {
+        super.setScrollAmount(hasScrollableContent() ? scrollAmount : 0.0);
     }
 
     public void clearMembers() {
@@ -91,11 +163,16 @@ public class TeamMemberList extends ObjectSelectionList<TeamMemberEntry> {
         return super.removeEntry(entry);
     }
 
+    public void replaceMembers(Collection<TeamMemberEntry> entries) {
+        this.replaceEntries(entries);
+        stopScrollbarDrag();
+    }
+
     public java.util.List<TeamMemberEntry> getEntries() {
         return super.children();
     }
 
     public int getListRight() {
-        return this.getLeft() + this.width;
+        return this.getLeft() + ROW_WIDTH;
     }
 }
