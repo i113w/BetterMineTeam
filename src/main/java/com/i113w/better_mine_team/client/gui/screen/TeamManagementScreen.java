@@ -14,7 +14,9 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
@@ -27,6 +29,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class TeamManagementScreen extends Screen {
 
@@ -42,12 +45,22 @@ public class TeamManagementScreen extends Screen {
     // 2. 内容视觉尺寸 (176x166) - 用于计算居中
     private static final int CONTENT_WIDTH = 176;
     private static final int CONTENT_HEIGHT = 166;
+    private static final int SEARCH_X_OFFSET = 7;
+    private static final int SEARCH_Y_OFFSET = 7;
+    private static final int SEARCH_WIDTH = 162;
+    private static final int SEARCH_HEIGHT = 18;
+    private static final int LIST_Y_OFFSET = 27;
+    private static final int LIST_HEIGHT = 132;
+    private static final int LIST_ROW_WIDTH = 150;
 
     private int guiLeft;
     private int guiTop;
 
     private TeamMemberList memberList;
+    private EditBox searchBox;
     private Button teamGlowButton;
+    private final List<TeamMemberEntry> sortedEntries = new ArrayList<>();
+    private String searchQuery = "";
 
     public TeamManagementScreen() {
         super(Component.translatable("better_mine_team.gui.title.management"));
@@ -61,10 +74,28 @@ public class TeamManagementScreen extends Screen {
         this.guiLeft = (this.width - CONTENT_WIDTH) / 2;
         this.guiTop = (this.height - CONTENT_HEIGHT) / 2;
 
-        // 初始化列表 (自动对齐到 guiLeft + 7)
-        this.memberList = new TeamMemberList(this.minecraft, this.guiLeft, this.guiTop);
+        // Entry 持有其所属列表的引用；界面重建时必须针对新列表重新创建。
+        this.entryCache.clear();
+        this.sortedEntries.clear();
+
+        // 搜索框占用列表顶部空间，列表和滚动条从其下方开始。
+        this.memberList = new TeamMemberList(this.minecraft, this.guiLeft,
+                this.guiTop + LIST_Y_OFFSET, LIST_HEIGHT);
         refreshMembers();
         this.addRenderableWidget(this.memberList);
+
+        Component searchLabel = Component.translatable("better_mine_team.gui.search_members");
+        this.searchBox = new EditBox(this.font,
+                this.guiLeft + SEARCH_X_OFFSET,
+                this.guiTop + SEARCH_Y_OFFSET,
+                SEARCH_WIDTH,
+                SEARCH_HEIGHT,
+                searchLabel);
+        this.searchBox.setMaxLength(64);
+        this.searchBox.setHint(searchLabel);
+        this.searchBox.setValue(this.searchQuery);
+        this.searchBox.setResponder(this::onSearchChanged);
+        this.addRenderableWidget(this.searchBox);
         requestCaptainStatus();
 
         // 初始化按钮 (紧贴内容区右侧)
@@ -160,6 +191,13 @@ public class TeamManagementScreen extends Screen {
                 gfx.drawString(this.font, teamText, textX, this.guiTop + CONTENT_HEIGHT + 4, 0xAAAAAA, true);
             }
         }
+
+        if (hasActiveSearch() && this.memberList != null && this.memberList.getEntries().isEmpty()) {
+            Component noResults = Component.translatable("better_mine_team.gui.search_no_results");
+            int centerX = this.guiLeft + SEARCH_X_OFFSET + LIST_ROW_WIDTH / 2;
+            int textY = this.guiTop + LIST_Y_OFFSET + (LIST_HEIGHT - this.font.lineHeight) / 2;
+            gfx.drawCenteredString(this.font, noResults, centerX, textY, 0xAAAAAA);
+        }
     }
 
     // 修复 IDE 警告：添加 @NotNull
@@ -173,19 +211,20 @@ public class TeamManagementScreen extends Screen {
 
         // 情况1: 玩家没有队伍
         if (myTeam == null) {
-            if (!entryCache.isEmpty()) {
-                this.memberList.clearMembers();
-                entryCache.clear();
-                lastKnownTeamName = null;
-            }
+            entryCache.clear();
+            sortedEntries.clear();
+            lastKnownTeamName = null;
+            resetSearch();
+            this.memberList.replaceMembers(List.of());
             return;
         }
 
         // 情况2: 玩家换队了 (完全重置)
         if (!myTeam.getName().equals(lastKnownTeamName)) {
-            this.memberList.clearMembers();
             entryCache.clear();
+            sortedEntries.clear();
             lastKnownTeamName = myTeam.getName();
+            resetSearch();
         }
 
         // 收集当前世界中属于该队伍的实体 UUID
@@ -210,43 +249,24 @@ public class TeamManagementScreen extends Screen {
             }
         }
 
-        // 1. 移除已离队的成员 (在缓存中但不在当前 UUID 集合中)
-        boolean removedAny = entryCache.keySet().removeIf(uuid -> {
-            if (!currentUUIDs.contains(uuid)) {
-                // 从 GUI 列表中移除
-                TeamMemberEntry entry = entryCache.get(uuid);
-                // TeamMemberList 需要暴露 removeEntry 方法，或者我们直接操作 children
-                // 假设 TeamMemberList 继承自 ObjectSelectionList，它有 removeEntry 方法
-                this.memberList.removeEntry(entry);
-                return true;
-            }
-            return false;
-        });
+        // 1. 移除已离队的成员。可见列表随后会从完整缓存重新生成。
+        entryCache.entrySet().removeIf(entry -> !currentUUIDs.contains(entry.getKey()));
 
         // 2. 添加新成员
-        boolean addedAny = !newMembers.isEmpty();
-        if (addedAny) {
-            for (LivingEntity member : newMembers) {
-                TeamMemberEntry entry = new TeamMemberEntry(member, this.memberList);
-                entryCache.put(member.getUUID(), entry);
-                this.memberList.addMember(entry);
-            }
+        for (LivingEntity member : newMembers) {
+            TeamMemberEntry entry = new TeamMemberEntry(member, this.memberList);
+            entryCache.put(member.getUUID(), entry);
         }
 
-        // 3. 仅当列表发生变动时，重新排序并保持滚动位置
-        if (removedAny || addedAny) {
-            double scrollAmount = this.memberList.getScrollAmount();
-            sortMembers();
-            this.memberList.setScrollAmount(scrollAmount);
-        }
+        // 名称可能在成员数量不变时发生变化，因此每次轮询都刷新排序和搜索结果。
+        rebuildSortedEntries();
+        applySearchFilter(false);
     }
 
-    // [新增] 排序辅助方法
-    private void sortMembers() {
-        // 获取当前所有 Entry
-        List<TeamMemberEntry> entries = new ArrayList<>(this.memberList.getEntries());
-
-        entries.sort((e1, e2) -> {
+    private void rebuildSortedEntries() {
+        this.sortedEntries.clear();
+        this.sortedEntries.addAll(this.entryCache.values());
+        this.sortedEntries.sort((e1, e2) -> {
             LivingEntity entity1 = e1.getMember(); // 调用刚才在 Entry 中添加的 getter
             LivingEntity entity2 = e2.getMember();
 
@@ -258,11 +278,56 @@ public class TeamManagementScreen extends Screen {
             // 按名字排序
             return entity1.getName().getString().compareToIgnoreCase(entity2.getName().getString());
         });
+    }
 
-        // 清空并重新添加 (ObjectSelectionList 没有直接的 replaceEntries，只能 clear + add)
-        this.memberList.clearMembers();
-        for (TeamMemberEntry entry : entries) {
-            this.memberList.addMember(entry);
+    private void onSearchChanged(String value) {
+        this.searchQuery = value;
+        applySearchFilter(true);
+    }
+
+    private void applySearchFilter(boolean resetScroll) {
+        if (this.memberList == null) return;
+
+        double previousScroll = resetScroll ? 0.0 : this.memberList.getScrollAmount();
+        if (resetScroll) this.memberList.stopScrollbarDrag();
+        String normalizedQuery = normalizeSearchText(this.searchQuery);
+        List<TeamMemberEntry> visibleEntries = new ArrayList<>();
+        for (TeamMemberEntry entry : this.sortedEntries) {
+            if (normalizedQuery.isEmpty() || matchesSearch(entry, normalizedQuery)) {
+                visibleEntries.add(entry);
+            }
+        }
+
+        if (!this.memberList.getEntries().equals(visibleEntries)) {
+            this.memberList.replaceMembers(visibleEntries);
+        }
+        this.memberList.setScrollAmount(previousScroll);
+    }
+
+    private boolean matchesSearch(TeamMemberEntry entry, String normalizedQuery) {
+        LivingEntity member = entry.getMember();
+        return containsSearchText(member.getDisplayName().getString(), normalizedQuery)
+                || containsSearchText(member.getName().getString(), normalizedQuery)
+                || containsSearchText(member.getType().getDescription().getString(), normalizedQuery)
+                || containsSearchText(BuiltInRegistries.ENTITY_TYPE.getKey(member.getType()).toString(), normalizedQuery);
+    }
+
+    private boolean containsSearchText(String candidate, String normalizedQuery) {
+        return normalizeSearchText(candidate).contains(normalizedQuery);
+    }
+
+    private String normalizeSearchText(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private boolean hasActiveSearch() {
+        return !normalizeSearchText(this.searchQuery).isEmpty();
+    }
+
+    private void resetSearch() {
+        this.searchQuery = "";
+        if (this.searchBox != null && !this.searchBox.getValue().isEmpty()) {
+            this.searchBox.setValue("");
         }
     }
 
@@ -315,8 +380,7 @@ public class TeamManagementScreen extends Screen {
     }
 
     private boolean shouldEnableTeamGlow() {
-        if (this.memberList == null) return true;
-        for (TeamMemberEntry entry : this.memberList.getEntries()) {
+        for (TeamMemberEntry entry : this.sortedEntries) {
             LivingEntity member = entry.getMember();
             if (!(member instanceof Player) && member.isAlive() && !TeamManager.isGlowEnabled(member)) {
                 return true;
@@ -326,8 +390,7 @@ public class TeamManagementScreen extends Screen {
     }
 
     private void applyVisibleTeamGlow(boolean enabled) {
-        if (this.memberList == null) return;
-        for (TeamMemberEntry entry : this.memberList.getEntries()) {
+        for (TeamMemberEntry entry : this.sortedEntries) {
             LivingEntity member = entry.getMember();
             if (!(member instanceof Player) && member.isAlive()) {
                 ClientTeamUiState.setClientGlowState(member, enabled);

@@ -74,5 +74,7 @@
 "better_mine_team.msg.personal_team_select_blocked": "Personal team is enabled. Turn it off before choosing a public team",
 "better_mine_team.gui.tooltip.personal_team": "Personal Team",
 "better_mine_team.msg.cmd_attack_patrol_blocked": "No selected unit can attack that target without leaving its patrol boundary",
-"better_mine_team.msg.cmd_attack_patrol_partial": "%s of %s units received the attack command; patrol boundaries blocked the rest"
+"better_mine_team.msg.cmd_attack_patrol_partial": "%s of %s units received the attack command; patrol boundaries blocked the rest",
+"better_mine_team.gui.search_members": "Search team members...",
+"better_mine_team.gui.search_no_results": "No matching team members"
 }
