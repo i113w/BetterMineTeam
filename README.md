@@ -8,7 +8,7 @@
 Compared to the NeoForge branch, the Forge setup may require an additional manual step.
 
 After making code changes — including the first setup — run the following command before launching the game from your IDE:
- 
+
 ```bash
 # IntelliJ IDEA
 ./gradlew clean genIntellijRuns build
