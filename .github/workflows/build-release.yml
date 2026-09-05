@@ -220,6 +220,13 @@ jobs:
             fi
           done < <(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq '.[] | select(.draft == false) | .tag_name')
 
+          # 兜底：历史 tag 可能使用旧命名方案（不带当前前缀），
+          # 此时直接取当前提交最近的祖先 tag 作为上一个版本。
+          # 祖先关系天然隔离了不同产品线（如 Forge 与 Neo 的分支历史互不包含）。
+          if [[ -z "$previous_tag" ]]; then
+            previous_tag="$(git describe --tags --abbrev=0 --exclude="$GITHUB_REF_NAME" "$GITHUB_SHA" 2>/dev/null || true)"
+          fi
+
           format="### %s%n%n%b%n%n[\`%h\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/%H)%n"
           if [[ -n "$previous_tag" ]]; then
             git log --reverse --no-merges --format="$format" "${previous_tag}..${GITHUB_SHA}" > release-notes.md
