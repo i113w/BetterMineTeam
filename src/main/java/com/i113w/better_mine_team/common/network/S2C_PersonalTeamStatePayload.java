@@ -27,10 +27,20 @@ public record S2C_PersonalTeamStatePayload(boolean available, boolean enabled) i
     }
 
     public static void clientHandle(final S2C_PersonalTeamStatePayload payload, final IPayloadContext context) {
-        context.enqueueWork(() -> {
-            if (Minecraft.getInstance().player != null) {
-                ClientTeamUiState.setPersonalTeamState(Minecraft.getInstance().player, payload.available(), payload.enabled());
-            }
-        });
+        ClientHandler.handle(payload, context);
+    }
+
+    // [修复] 客户端专属逻辑放入静态内部类作为"懒加载防火墙"：
+    // 服务端加载本 payload 类时不再直接引用 net.minecraft.client.*（否则 NeoForge 的
+    // RuntimeDistCleaner 会在服务端抛 "Attempted to load class .../LocalPlayer for invalid dist"）。
+    // 只有客户端真正执行 clientHandle 时，ClientHandler 才会被加载。
+    private static final class ClientHandler {
+        static void handle(final S2C_PersonalTeamStatePayload payload, final IPayloadContext context) {
+            context.enqueueWork(() -> {
+                if (Minecraft.getInstance().player != null) {
+                    ClientTeamUiState.setPersonalTeamState(Minecraft.getInstance().player, payload.available(), payload.enabled());
+                }
+            });
+        }
     }
 }

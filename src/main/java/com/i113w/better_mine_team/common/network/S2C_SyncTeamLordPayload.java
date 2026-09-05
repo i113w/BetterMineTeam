@@ -24,12 +24,21 @@ public record S2C_SyncTeamLordPayload(boolean hasPermission) implements CustomPa
     }
 
     public static void clientHandle(final S2C_SyncTeamLordPayload payload, final IPayloadContext context) {
-        context.enqueueWork(() -> {
-            // 客户端处理：接收包并更新本地玩家的 NBT
-            if (Minecraft.getInstance().player != null) {
-                Minecraft.getInstance().player.getPersistentData().putBoolean("bmt_lord_of_teams", payload.hasPermission());
-                BetterMineTeam.debug("Client received TeamsLord permission: " + payload.hasPermission());
-            }
-        });
+        ClientHandler.handle(payload, context);
+    }
+
+    // [修复] 客户端专属逻辑放入静态内部类作为"懒加载防火墙"：
+    // 避免服务端加载本 payload 类时连带加载 net.minecraft.client.*（否则 RuntimeDistCleaner 抛
+    // "Attempted to load class .../LocalPlayer for invalid dist DEDICATED_SERVER"）。
+    private static final class ClientHandler {
+        static void handle(final S2C_SyncTeamLordPayload payload, final IPayloadContext context) {
+            context.enqueueWork(() -> {
+                // 客户端处理：接收包并更新本地玩家的 NBT
+                if (Minecraft.getInstance().player != null) {
+                    Minecraft.getInstance().player.getPersistentData().putBoolean("bmt_lord_of_teams", payload.hasPermission());
+                    BetterMineTeam.debug("Client received TeamsLord permission: " + payload.hasPermission());
+                }
+            });
+        }
     }
 }
