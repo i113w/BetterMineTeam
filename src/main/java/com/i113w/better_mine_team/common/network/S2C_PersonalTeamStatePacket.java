@@ -1,7 +1,5 @@
 package com.i113w.better_mine_team.common.network;
 
-import com.i113w.better_mine_team.client.gui.ClientTeamUiState;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.network.NetworkEvent;
 
@@ -27,12 +25,22 @@ public class S2C_PersonalTeamStatePacket {
 
     public static void handle(S2C_PersonalTeamStatePacket msg, Supplier<NetworkEvent.Context> ctxSupplier) {
         NetworkEvent.Context ctx = ctxSupplier.get();
-        ctx.enqueueWork(() -> {
-            Minecraft mc = Minecraft.getInstance();
-            if (mc.player != null) {
-                ClientTeamUiState.setPersonalTeamState(mc.player, msg.available, msg.enabled);
-            }
-        });
+        ClientHandler.handle(msg, ctx);
         ctx.setPacketHandled(true);
+    }
+
+    // [FIX] Client-only logic lives in a static inner class as a lazy-loading firewall:
+    // the server no longer references net.minecraft.client.* when loading this class (otherwise
+    // Forge's RuntimeDistCleaner throws "Attempted to load class .../LocalPlayer for invalid dist").
+    // ClientHandler is only loaded when handle() actually runs on the client.
+    private static class ClientHandler {
+        static void handle(S2C_PersonalTeamStatePacket msg, NetworkEvent.Context ctx) {
+            ctx.enqueueWork(() -> {
+                net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+                if (mc.player != null) {
+                    com.i113w.better_mine_team.client.gui.ClientTeamUiState.setPersonalTeamState(mc.player, msg.available, msg.enabled);
+                }
+            });
+        }
     }
 }

@@ -1,6 +1,5 @@
 package com.i113w.better_mine_team.common.network.rts;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraftforge.network.NetworkEvent;
@@ -37,13 +36,23 @@ public class S2C_CommandAckPacket {
 
     public static void handle(S2C_CommandAckPacket msg, Supplier<NetworkEvent.Context> ctxSupplier) {
         NetworkEvent.Context ctx = ctxSupplier.get();
-        ctx.enqueueWork(() -> {
-            Minecraft mc = Minecraft.getInstance();
-            if (mc.player != null) {
-                mc.player.displayClientMessage(msg.message, true);
-            }
-        });
+        ClientHandler.handle(msg, ctx);
         ctx.setPacketHandled(true);
+    }
+
+    // [修复] 客户端专属逻辑放入静态内部类作为"懒加载防火墙"：
+    // 服务端加载本类时不再直接引用 net.minecraft.client.*（否则 Forge 的 RuntimeDistCleaner 会在
+    // 服务端抛 "Attempted to load class .../LocalPlayer for invalid dist DEDICATED_SERVER"）。
+    // 只有客户端真正执行 handle 时，ClientHandler 才会被加载。
+    private static class ClientHandler {
+        static void handle(S2C_CommandAckPacket msg, NetworkEvent.Context ctx) {
+            ctx.enqueueWork(() -> {
+                net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+                if (mc.player != null) {
+                    mc.player.displayClientMessage(msg.message, true);
+                }
+            });
+        }
     }
 
     public boolean isSuccess() { return success; }
